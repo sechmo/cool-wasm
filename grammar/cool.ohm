@@ -1,0 +1,117 @@
+Cool {
+    Program = (ClassStatement ";")+
+    ClassStatement = class typeIdentifier (inherits typeIdentifier)? "{" (Feature ";")* "}"
+
+    Feature = Attribute | Method
+    Attribute = objectIdentifier ":" typeIdentifier ("<-" Expr)?
+    Method = objectIdentifier "(" ListOf<Formal,","> ")" ":" typeIdentifier "{" Expr "}"
+    Formal = objectIdentifier ":" typeIdentifier
+
+    Expr = AdditiveExpr "<" AdditiveExpr -- LessThan
+         | AdditiveExpr "<=" AdditiveExpr -- LessThanOrEqual
+         | AdditiveExpr "=" AdditiveExpr -- Equal
+         | AdditiveExpr
+
+    AdditiveExpr = AdditiveExpr "+" MultiplicativeExpression -- Addition
+                | AdditiveExpr "-" MultiplicativeExpression -- Subtraction
+                | MultiplicativeExpression
+
+    MultiplicativeExpression = MultiplicativeExpression "*" DispatchExpression -- Multiplication
+                             | MultiplicativeExpression "/" DispatchExpression -- Division
+                             | DispatchExpression
+
+    DispatchExpression = (DispatchExpression ".")? objectIdentifier "(" ListOf<Expr,","> ")" -- Dynamic
+                       | DispatchExpression "@" typeIdentifier "." objectIdentifier "(" ListOf<Expr,","> ")" -- Static
+                       | OtherExpression
+
+    OtherExpression = AssigmentExpression
+                    | IfExpression
+                    | WhileExpression
+                    | BlockExpression
+                    | LetExpression
+                    | CaseExpression
+                    | NewExpression
+                    | IsVoidExpression
+                    | Negation
+                    | NotExpression
+                    | "(" Expr ")" -- parenthesized
+                    | IntegerConst
+                    | StringConst
+                    | BooleanConst
+                    | ObjectId
+
+    ObjectId = objectIdentifier
+
+    BooleanConst = booleanLiteral
+
+    StringConst = stringLiteral
+
+    IntegerConst = integerLiteral
+
+    AssigmentExpression = objectIdentifier "<-" Expr
+
+    IfExpression = if Expr then Expr else Expr fi
+
+    WhileExpression = while Expr loop Expr pool
+
+    BlockExpression = "{" (Expr ";")+ "}"
+
+    LetExpression = let LetAux
+
+    LetAux = objectIdentifier ":" typeIdentifier "<-" Expr in Expr -- finalWithInit
+           | objectIdentifier ":" typeIdentifier in Expr -- finalWithoutInit
+           | objectIdentifier ":" typeIdentifier "<-" Expr "," LetAux -- midWithInit
+           | objectIdentifier ":" typeIdentifier "," LetAux -- midWithoutInit
+
+    CaseExpression = case Expr of (objectIdentifier ":" typeIdentifier "=>" Expr ";")+ esac
+
+    NewExpression = new typeIdentifier
+
+    IsVoidExpression = isvoid Expr
+
+    Negation = "~" Expr
+
+    NotExpression = not Expr
+
+    space := "\x20" | "\x09".."\x0D" | comment -- comment
+    comment = singlelineComment | multilineComment
+    singlelineComment = "--" (~lineTerminator any)*
+    multilineCommentChar = ~("(*" | "*)") any
+    multilineComment = "(*" (multilineCommentChar | multilineComment)* "*)"
+
+    booleanLiteral = true | false
+
+    integerLiteral = digit+
+
+    stringLiteral = "\"" stringChar* "\""
+    stringSingleChar = ~("\x00" | "\"") any
+    stringChar = ~("\"" | "\\" | lineTerminator) ~("\x00" | "\"") any -- nonEscaped
+               | "\\" ~(lineTerminator) ~("\x00") any -- escaped
+               | "\\" lineTerminator -- lineContinuation
+    lineTerminator = "\n" | "\r\n"
+
+    objectIdentifier (object identifier) = ~keyword lower identifierPart*
+    typeIdentifier (type identifier) = ~keyword upper identifierPart*
+    identifierPart = (letter | digit | "_")
+
+    keyword = (class | else | false | fi | if | in | inherits | isvoid | let | loop | pool | then | while | case | esac | new | of | not | true)
+    class = caseInsensitive<"class"> ~identifierPart
+    else = caseInsensitive<"else"> ~identifierPart
+    false = caseInsensitive<"false"> ~identifierPart
+    fi = caseInsensitive<"fi"> ~identifierPart
+    if = caseInsensitive<"if"> ~identifierPart
+    in = caseInsensitive<"in"> ~identifierPart
+    inherits = caseInsensitive<"inherits"> ~identifierPart
+    isvoid = caseInsensitive<"isvoid"> ~identifierPart
+    let = caseInsensitive<"let"> ~identifierPart
+    loop = caseInsensitive<"loop"> ~identifierPart
+    pool = caseInsensitive<"pool"> ~identifierPart
+    then = caseInsensitive<"then"> ~identifierPart
+    while = caseInsensitive<"while"> ~identifierPart
+    case = caseInsensitive<"case"> ~identifierPart
+    esac = caseInsensitive<"esac"> ~identifierPart
+    new = caseInsensitive<"new"> ~identifierPart
+    of = caseInsensitive<"of"> ~identifierPart
+    not = caseInsensitive<"not"> ~identifierPart
+    true = caseInsensitive<"true"> ~identifierPart
+}

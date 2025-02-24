@@ -1,0 +1,15 @@
+{
+  "tasks": {
+    "dev": "deno run --watch main.ts",
+    "test-parser": "deno run --allow-read --allow-write  parser-test.ts"
+  },
+  "imports": {
+    "@ohm-js/cli": "npm:@ohm-js/cli@^2.0.0",
+    "@std/assert": "jsr:@std/assert@1",
+    "@std/fs": "jsr:@std/fs@^1.0.13",
+    "@std/path": "jsr:@std/path@^1.0.8",
+    "@types/diff": "npm:@types/diff@^7.0.1",
+    "diff": "npm:diff@^7.0.0",
+    "ohm-js": "npm:ohm-js@^17.1.0"
+  }
+}
