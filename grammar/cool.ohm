@@ -1,39 +1,57 @@
 Cool {
     Program = (ClassStatement ";")+
-    ClassStatement = class typeIdentifier (inherits typeIdentifier)? "{" (Feature ";")* "}"
+    ClassStatement = class typeIdentifier inherits typeIdentifier "{" (Feature ";")* "}" -- WithParent
+                   | class typeIdentifier "{" (Feature ";")* "}" -- WithoutParent
 
     Feature = Attribute | Method
     Attribute = objectIdentifier ":" typeIdentifier ("<-" Expr)?
     Method = objectIdentifier "(" ListOf<Formal,","> ")" ":" typeIdentifier "{" Expr "}"
     Formal = objectIdentifier ":" typeIdentifier
 
-    Expr = AdditiveExpr "<" AdditiveExpr -- LessThan
+    Expr = AssigmentExpression
+            |  NotExpression 
+            | ComparisonExpr
+         
+     
+    AssigmentExpression = objectIdentifier "<-" Expr
+    
+    NotExpression = not Expr
+    
+    ComparisonExpr = AdditiveExpr "<" AdditiveExpr -- LessThan
          | AdditiveExpr "<=" AdditiveExpr -- LessThanOrEqual
          | AdditiveExpr "=" AdditiveExpr -- Equal
          | AdditiveExpr
+
 
     AdditiveExpr = AdditiveExpr "+" MultiplicativeExpression -- Addition
                 | AdditiveExpr "-" MultiplicativeExpression -- Subtraction
                 | MultiplicativeExpression
 
-    MultiplicativeExpression = MultiplicativeExpression "*" DispatchExpression -- Multiplication
-                             | MultiplicativeExpression "/" DispatchExpression -- Division
-                             | DispatchExpression
+    MultiplicativeExpression = MultiplicativeExpression "*" UnaryExpr -- Multiplication
+                             | MultiplicativeExpression "/" UnaryExpr -- Division
+                             | UnaryExpr
+                             
+    UnaryExpr = IsVoidExpression
+                       | Negation
+                       | DispatchExpression
+    
+    IsVoidExpression = isvoid DispatchExpression
 
-    DispatchExpression = (DispatchExpression ".")? objectIdentifier "(" ListOf<Expr,","> ")" -- Dynamic
+    Negation = "~" DispatchExpression
+
+    DispatchExpression = DispatchExpression "." objectIdentifier "(" ListOf<Expr,","> ")" -- Dynamic
+                       | objectIdentifier "(" ListOf<Expr,","> ")" -- DynamicNoCaller
                        | DispatchExpression "@" typeIdentifier "." objectIdentifier "(" ListOf<Expr,","> ")" -- Static
                        | OtherExpression
 
-    OtherExpression = AssigmentExpression
-                    | IfExpression
+    
+
+    OtherExpression = IfExpression
                     | WhileExpression
                     | BlockExpression
                     | LetExpression
                     | CaseExpression
                     | NewExpression
-                    | IsVoidExpression
-                    | Negation
-                    | NotExpression
                     | "(" Expr ")" -- parenthesized
                     | IntegerConst
                     | StringConst
@@ -48,7 +66,6 @@ Cool {
 
     IntegerConst = integerLiteral
 
-    AssigmentExpression = objectIdentifier "<-" Expr
 
     IfExpression = if Expr then Expr else Expr fi
 
@@ -63,15 +80,10 @@ Cool {
            | objectIdentifier ":" typeIdentifier "<-" Expr "," LetAux -- midWithInit
            | objectIdentifier ":" typeIdentifier "," LetAux -- midWithoutInit
 
-    CaseExpression = case Expr of (objectIdentifier ":" typeIdentifier "=>" Expr ";")+ esac
+    CaseExpression = case Expr of (Branch ";")+ esac
+    Branch = objectIdentifier ":" typeIdentifier "=>" Expr 
 
     NewExpression = new typeIdentifier
-
-    IsVoidExpression = isvoid Expr
-
-    Negation = "~" Expr
-
-    NotExpression = not Expr
 
     space := "\x20" | "\x09".."\x0D" | comment -- comment
     comment = singlelineComment | multilineComment
