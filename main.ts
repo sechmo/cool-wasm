@@ -1,6 +1,8 @@
 // @ts-types="./grammar/cool.ohm-bundle.d.ts"
 import grammar from "./grammar/cool.ohm-bundle.js";
 import astSemantics from "./grammar/astSemantics.ts";
+import { ASTNode } from "./ast.ts";
+import { basename } from "@std/path";
 
 
 const parseFileToAST = (filePath: string) => {
@@ -10,7 +12,15 @@ const parseFileToAST = (filePath: string) => {
     throw match.message;
   }
 
-  return astSemantics(match).toAST();
+  const fileBasename = basename(filePath);
+
+  const ast =  astSemantics(match).toAST() as ASTNode;
+
+  ast.forEach((n) => {
+    n.location.filename = fileBasename;
+  })
+
+  return ast;
 }
 
 

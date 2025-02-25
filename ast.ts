@@ -3,6 +3,11 @@ import { AbstractSymbol } from "./abstractTable.ts";
 import { SourceLocation, Utilities } from "./util.ts";
 
 /**
+ * Callback type for AST traversal
+ */
+export type ASTVisitorCallback = (node: ASTNode) => void;
+
+/**
  * Base abstract class for all AST nodes
  */
 export abstract class ASTNode {
@@ -19,6 +24,12 @@ export abstract class ASTNode {
   protected dumpLine(n: number): string {
     return `${Utilities.pad(n)}#${this.location.lineNumber}\n`;
   }
+  
+  /**
+   * Traverses this node and all its child nodes, calling the callback on each
+   * @param callback Function to call on each visited node
+   */
+  abstract forEach(callback: ASTVisitorCallback): void;
 }
 
 /**
@@ -46,12 +57,27 @@ export abstract class Expr extends ASTNode {
       return `${Utilities.pad(n)}: _no_type\n`;
     }
   }
+  
+  /**
+   * Base implementation for expressions
+   * Subclasses will override this when they have child nodes
+   */
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+  }
 }
 
 /**
  * Base abstract class for all features (methods and attributes)
  */
 export abstract class Feature extends ASTNode {
+  /**
+   * Base implementation for features
+   * Subclasses will override this when they have child nodes
+   */
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+  }
 }
 
 /**
@@ -71,6 +97,13 @@ export class Program extends ASTNode {
     }
     
     return result;
+  }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    for (const cls of this.classes) {
+      cls.forEach(callback);
+    }
   }
 }
 
@@ -111,6 +144,13 @@ export class ClassStatement extends ASTNode {
     
     return result;
   }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    for (const feature of this.features) {
+      feature.forEach(callback);
+    }
+  }
 }
 
 export type Features = Feature[];
@@ -143,6 +183,14 @@ export class Method extends Feature {
     
     return result;
   }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    for (const formal of this.formals) {
+      formal.forEach(callback);
+    }
+    this.body.forEach(callback);
+  }
 }
 
 export type Formals = Formal[];
@@ -167,6 +215,11 @@ export class Formal extends ASTNode {
     
     return result;
   }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    // No child nodes to traverse
+  }
 }
 
 /**
@@ -190,6 +243,11 @@ export class Attribute extends Feature {
     result += this.init.dumpWithTypes(n + 2);
     
     return result;
+  }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.init.forEach(callback);
   }
 }
 
@@ -217,6 +275,11 @@ export class Branch extends ASTNode {
     
     return result;
   }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.expr.forEach(callback);
+  }
 }
 
 export type Cases = Branch[];
@@ -236,6 +299,8 @@ export class NoExpr extends Expr {
     
     return result;
   }
+  
+  // No child nodes to traverse, so use base implementation
 }
 
 /**
@@ -257,6 +322,13 @@ export class Block extends Expr {
     result += this.dumpType(n);
     
     return result;
+  }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    for (const expr of this.expressions) {
+      expr.forEach(callback);
+    }
   }
 }
 
@@ -280,6 +352,11 @@ export class Assignment extends Expr {
     result += this.dumpType(n);
     
     return result;
+  }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.expr.forEach(callback);
   }
 }
 
@@ -314,6 +391,14 @@ export class StaticDispatch extends Expr {
     
     return result;
   }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.expr.forEach(callback);
+    for (const arg of this.args) {
+      arg.forEach(callback);
+    }
+  }
 }
 
 /**
@@ -345,6 +430,14 @@ export class DynamicDispatch extends Expr {
     
     return result;
   }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.expr.forEach(callback);
+    for (const arg of this.args) {
+      arg.forEach(callback);
+    }
+  }
 }
 
 /**
@@ -370,6 +463,13 @@ export class Conditional extends Expr {
     
     return result;
   }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.predicate.forEach(callback);
+    this.thenExpr.forEach(callback);
+    this.elseExpr.forEach(callback);
+  }
 }
 
 /**
@@ -392,6 +492,12 @@ export class Loop extends Expr {
     result += this.dumpType(n);
     
     return result;
+  }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.predicate.forEach(callback);
+    this.body.forEach(callback);
   }
 }
 
@@ -420,6 +526,14 @@ export class TypeCase extends Expr {
     
     return result;
   }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.expr.forEach(callback);
+    for (const branch of this.cases) {
+      branch.forEach(callback);
+    }
+  }
 }
 
 /**
@@ -447,6 +561,12 @@ export class Let extends Expr {
     
     return result;
   }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.init.forEach(callback);
+    this.body.forEach(callback);
+  }
 }
 
 /**
@@ -469,6 +589,12 @@ export class Addition extends Expr {
     result += this.dumpType(n);
     
     return result;
+  }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.e1.forEach(callback);
+    this.e2.forEach(callback);
   }
 }
 
@@ -493,6 +619,12 @@ export class Subtraction extends Expr {
     
     return result;
   }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.e1.forEach(callback);
+    this.e2.forEach(callback);
+  }
 }
 
 /**
@@ -515,6 +647,12 @@ export class Multiplication extends Expr {
     result += this.dumpType(n);
     
     return result;
+  }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.e1.forEach(callback);
+    this.e2.forEach(callback);
   }
 }
 
@@ -539,6 +677,12 @@ export class Division extends Expr {
     
     return result;
   }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.e1.forEach(callback);
+    this.e2.forEach(callback);
+  }
 }
 
 /**
@@ -559,6 +703,11 @@ export class Negation extends Expr {
     result += this.dumpType(n);
     
     return result;
+  }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.expr.forEach(callback);
   }
 }
 
@@ -583,6 +732,12 @@ export class LessThan extends Expr {
     
     return result;
   }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.e1.forEach(callback);
+    this.e2.forEach(callback);
+  }
 }
 
 /**
@@ -605,6 +760,12 @@ export class Equal extends Expr {
     result += this.dumpType(n);
     
     return result;
+  }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.e1.forEach(callback);
+    this.e2.forEach(callback);
   }
 }
 
@@ -629,6 +790,12 @@ export class LessThanOrEqual extends Expr {
     
     return result;
   }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.e1.forEach(callback);
+    this.e2.forEach(callback);
+  }
 }
 
 /**
@@ -649,6 +816,11 @@ export class Complement extends Expr {
     result += this.dumpType(n);
     
     return result;
+  }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.expr.forEach(callback);
   }
 }
 
@@ -671,6 +843,8 @@ export class IntegerConstant extends Expr {
     
     return result;
   }
+  
+  // No child nodes to traverse, so use base implementation
 }
 
 /**
@@ -692,6 +866,8 @@ export class BooleanConstant extends Expr {
     
     return result;
   }
+  
+  // No child nodes to traverse, so use base implementation
 }
 
 /**
@@ -713,6 +889,8 @@ export class StringConstant extends Expr {
     
     return result;
   }
+  
+  // No child nodes to traverse, so use base implementation
 }
 
 /**
@@ -734,6 +912,8 @@ export class New extends Expr {
     
     return result;
   }
+  
+  // No child nodes to traverse, so use base implementation
 }
 
 /**
@@ -754,6 +934,11 @@ export class IsVoid extends Expr {
     result += this.dumpType(n);
     
     return result;
+  }
+  
+  override forEach(callback: ASTVisitorCallback): void {
+    callback(this);
+    this.expr.forEach(callback);
   }
 }
 
@@ -776,4 +961,6 @@ export class ObjectReference extends Expr {
     
     return result;
   }
+  
+  // No child nodes to traverse, so use base implementation
 }
