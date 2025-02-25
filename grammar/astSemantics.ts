@@ -54,9 +54,29 @@ astSemantics.addOperation<AbstractSymbol>("getSymbol", {
   },
 
   stringLiteral(_LQ, inside, _RQ) {
-    return AbstractTable.stringTable.add(inside.sourceString);
+    const parsedInside = inside.children.map(c => c.parseChar()).join("")
+    return AbstractTable.stringTable.add(parsedInside);
   },
 });
+
+astSemantics.addOperation<string>("parseChar", {
+    stringChar_nonEscaped(val) {
+        return val.sourceString;
+    },
+
+    stringChar_escaped(_BACKSLASH, val) {
+        const char = val.sourceString;
+        if (char === "b") return "\b";
+        if (char === "t") return "\t";
+        if (char === "n") return "\n";
+        if (char === "f") return "\f";
+        return char;
+    },
+
+    stringChar_lineContinuation(_BACKSLASH, lineCont) {
+        return lineCont.sourceString
+    }
+})
 
 astSemantics.addOperation<AST.ASTNode>("toAST", {
   Program(classes, _SEMIS) {
