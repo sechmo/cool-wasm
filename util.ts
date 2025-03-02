@@ -3,14 +3,14 @@
  */
 export class Utilities {
   static pad(n: number): string {
-    return ' '.repeat(n);
+    return " ".repeat(n);
   }
-  
+
   static printEscapedString(str: string): string {
-    return str.replace(/\\/g, '\\\\')
-              .replace(/\n/g, '\\n')
-              .replace(/\t/g, '\\t')
-              .replace(/\"/g, '\\"');
+    return str.replace(/\\/g, "\\\\")
+      .replace(/\n/g, "\\n")
+      .replace(/\t/g, "\\t")
+      .replace(/\"/g, '\\"');
   }
 }
 
@@ -21,9 +21,9 @@ export class SourceLocation {
   constructor(
     public filename: string,
     public lineNumber: number,
-    public columnNumber: number = 0
+    public columnNumber: number = 0,
   ) {}
-  
+
   toString(): string {
     return `${this.filename}:${this.lineNumber}:${this.columnNumber}`;
   }
