@@ -6,6 +6,7 @@ import {
   Formal,
   Method,
   NoExpr,
+  Program,
 } from "./ast.ts";
 import { SourceLocation } from "./util.ts";
 import * as ASTConst from "./astConstants.ts";
@@ -15,13 +16,13 @@ export class ClassTable {
   private childToParent: Map<AbstractSymbol, AbstractSymbol>;
   private nameToClassNode: Map<AbstractSymbol, ClassStatement>;
 
-  constructor(clss: Classes) {
+  constructor(prog: Program) {
     this.childToParent = new Map();
     this.nameToClassNode = new Map();
 
     this.installBasicClasses();
 
-    for (const cls of clss) {
+    for (const cls of prog.classes) {
       this.addClass(cls);
     }
 
@@ -30,6 +31,11 @@ export class ClassTable {
 
     this.checkIsTree();
     if (ErrorLogger.anyError()) return;
+
+    // check there is a main class 
+    if (!this.childToParent.has(ASTConst.Main)) {
+      ErrorLogger.semantError(prog.location, `no ${ASTConst.Main.getString()} class found`);
+    }
   }
 
   private addClass(cls: ClassStatement): void {
@@ -197,6 +203,10 @@ export class ClassTable {
     if (node !== undefined) return node;
 
     throw `class with name ${clsName} does not exists`;
+  }
+
+  public allClassNodes(): Classes {
+    return [...this.nameToClassNode.values()];
   }
 
   private installBasicClasses(): void {
