@@ -126,15 +126,21 @@ astSemantics.addOperation<AST.ASTNode>("toAST", {
     return feat.toAST();
   },
 
-  Attribute(name, _COLOR, tyepDecl, _ARROW, init) {
-    const actualInit = init.sourceString === ""
-      ? new AST.NoExpr(this.getLoc())
-      : init.toAst();
+  Attribute_WithInit(name, _COLON, typeDecl, _ARROW, init) {
     return new AST.Attribute(
       this.getLoc(),
       name.getSymbol(),
-      tyepDecl.getSymbol(),
-      actualInit,
+      typeDecl.getSymbol(),
+      init.toAST(),
+    );
+  },
+
+  Attribute_WithoutInit(name, _COLON, typeDecl) {
+    return new AST.Attribute(
+      this.getLoc(),
+      name.getSymbol(),
+      typeDecl.getSymbol(),
+      new AST.NoExpr(this.getLoc()),
     );
   },
 

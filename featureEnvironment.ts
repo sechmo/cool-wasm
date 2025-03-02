@@ -3,6 +3,7 @@ import { Attribute, ClassStatement, Method } from "./ast.ts";
 import { ClassTable } from "./classTable.ts";
 import * as ASTConst from "./astConstants.ts";
 import { ErrorLogger } from "./errorLogger.ts";
+import { ScopedEnvironment } from "./scopedEnvironment.ts";
 
 export type MethodSignature = {
   arguments: Array<{ type: AbstractSymbol; name: AbstractSymbol }>;
@@ -56,6 +57,10 @@ export class FeatureEnvironment {
       } else if (feat instanceof Method) {
         this.addMethod(feat, signatures, cls.parentName);
       }
+    }
+
+    if (cls.name === ASTConst.Object_) {
+      return;
     }
 
     // propagate inherited attributes
@@ -138,7 +143,7 @@ export class FeatureEnvironment {
         continue;
       }
 
-      if (this.clsTbl.classExists(formal.typeDecl)) {
+      if (!this.clsTbl.classExists(formal.typeDecl)) {
         ErrorLogger.semantError(
           formal.location,
           `argument ${formal.name.getString()} is declared with undefined argument type ${formal.typeDecl.getString()}`,
@@ -234,4 +239,52 @@ export class FeatureEnvironment {
 
     return !anyErr;
   }
+
+  public classAttributeEnvironment(
+    clsName: AbstractSymbol,
+  ): ScopedEnvironment<AbstractSymbol, AbstractSymbol> {
+    if (!this.attributeTypes.has(clsName)) {
+      throw `invalid class attribute environment retrieval: class ${clsName} is not installed`;
+    }
+
+    const attrEnv = new ScopedEnvironment<AbstractSymbol, AbstractSymbol>();
+    attrEnv.enterNewScope();
+
+    for (
+      const [attrName, attrType] of this.attributeTypes.get(clsName)!.entries()
+    ) {
+      attrEnv.add(attrName, attrType);
+    }
+
+    return attrEnv;
+  }
+
+  public classHasMethod(
+    clsName: AbstractSymbol,
+    methName: AbstractSymbol,
+    currClsName: AbstractSymbol,
+  ): boolean {
+    if (clsName === ASTConst.SELF_TYPE) {
+      return this.classHasMethod(currClsName, methName, currClsName);
+    }
+
+    if (!this.methodSignatures.has(clsName)) {
+      throw `invalid classHasMethod check: class ${clsName} is not installed`;
+    }
+
+    return this.methodSignatures.get(clsName)!.has(methName);
+  }
+
+  public classGetMethodSignature(
+    clsName: AbstractSymbol,
+    methName: AbstractSymbol,
+    currClsName: AbstractSymbol,
+  ): MethodSignature {
+    if (clsName === ASTConst.SELF_TYPE) {
+      return this.classGetMethodSignature(currClsName, methName, currClsName);
+    }
+
+    return this.methodSignatures.get(clsName)!.get(methName)!;
+  }
+
 }

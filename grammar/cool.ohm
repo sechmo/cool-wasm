@@ -4,7 +4,8 @@ Cool {
                    | class typeIdentifier "{" (Feature ";")* "}" -- WithoutParent
 
     Feature = Attribute | Method
-    Attribute = objectIdentifier ":" typeIdentifier ("<-" Expr)?
+    Attribute = objectIdentifier ":" typeIdentifier "<-" Expr -- WithInit
+              | objectIdentifier ":" typeIdentifier -- WithoutInit
     Method = objectIdentifier "(" ListOf<Formal,","> ")" ":" typeIdentifier "{" Expr "}"
     Formal = objectIdentifier ":" typeIdentifier
 

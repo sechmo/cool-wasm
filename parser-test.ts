@@ -6,7 +6,8 @@ import { basename, extname } from "@std/path";
 // Import your grammar and semantics directly
 import grammar from "./grammar/cool.ohm-bundle.js";
 import astSemantics from "./grammar/astSemantics.ts";
-import { ASTNode } from "./ast.ts";
+import { ASTNode, Program } from "./ast.ts";
+import { ErrorLogger } from "./errorLogger.ts";
 
 // Configuration options
 interface ConfigOptions {
@@ -103,12 +104,20 @@ function parseFileToAST(
       n.location.filename = fileBasename;
     });
 
+    if (!(ast as Program).semant()) {
+      return {
+        success: false,
+        result: null,
+        error: ErrorLogger.fullErrorMsg()
+      };
+    }
+
     return {
       success: true,
       result: ast,
     };
   } catch (e: unknown) {
-    const errorMessage = e instanceof Error ? e.message : String(e);
+    const errorMessage = e instanceof Error ? e.message + (e.stack ?? "") : String(e);
     return {
       success: false,
       result: null,

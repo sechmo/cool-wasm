@@ -1,6 +1,11 @@
 import "./abstractTable.ts";
 import { AbstractSymbol } from "./abstractTable.ts";
+import { ClassTable } from "./classTable.ts";
+import { ErrorLogger } from "./errorLogger.ts";
+import { FeatureEnvironment } from "./featureEnvironment.ts";
+import { ScopedEnvironment } from "./scopedEnvironment.ts";
 import { SourceLocation, Utilities } from "./util.ts";
+import * as ASTConst from "./astConstants.ts";
 
 /**
  * Callback type for AST traversal
@@ -65,6 +70,13 @@ export abstract class Expr extends ASTNode {
   override forEach(callback: ASTVisitorCallback): void {
     callback(this);
   }
+
+  abstract semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void;
 }
 
 /**
@@ -78,6 +90,13 @@ export abstract class Feature extends ASTNode {
   override forEach(callback: ASTVisitorCallback): void {
     callback(this);
   }
+
+  abstract semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void;
 }
 
 /**
@@ -104,6 +123,32 @@ export class Program extends ASTNode {
     for (const cls of this.classes) {
       cls.forEach(callback);
     }
+  }
+
+  public semant(): boolean {
+    ErrorLogger.clear();
+    const clsTbl = new ClassTable(this);
+    if (ErrorLogger.anyError()) {
+      ErrorLogger.error("Compilation halted due to static semantic errors");
+      return false;
+    }
+
+    const featEnv = new FeatureEnvironment(clsTbl);
+    if (ErrorLogger.anyError()) {
+      ErrorLogger.error("Compilation halted due to static semantic errors");
+      return false;
+    }
+
+    for (const cls of this.classes) {
+      cls.semant(clsTbl, featEnv);
+    }
+
+    if (ErrorLogger.anyError()) {
+      ErrorLogger.error("Compilation halted due to static semantic errors");
+      return false;
+    }
+
+    return true;
   }
 }
 
@@ -153,6 +198,14 @@ export class ClassStatement extends ASTNode {
       feature.forEach(callback);
     }
   }
+
+  public semant(clsTbl: ClassTable, featEnv: FeatureEnvironment): void {
+    const attrEnv = featEnv.classAttributeEnvironment(this.name);
+
+    for (const feat of this.features) {
+      feat.semant(clsTbl, attrEnv, featEnv, this.name);
+    }
+  }
 }
 
 export type Features = Feature[];
@@ -192,6 +245,33 @@ export class Method extends Feature {
       formal.forEach(callback);
     }
     this.body.forEach(callback);
+  }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    objEnv.enterNewScope();
+
+    objEnv.add(ASTConst.self, ASTConst.SELF_TYPE);
+    for (const formal of this.formals) {
+      objEnv.add(formal.name, formal.typeDecl);
+    }
+
+    this.body.semant(clsTbl, objEnv, featEnv, currClsName);
+    objEnv.exitLastScope();
+
+    if (
+      !clsTbl.isSubclass(this.body.getType()!, this.returnType, currClsName)
+    ) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid method body return type ${this.body.getType()!} ` +
+          `is not a subtype of ${this.returnType}`,
+      );
+    }
   }
 }
 
@@ -251,6 +331,30 @@ export class Attribute extends Feature {
     callback(this);
     this.init.forEach(callback);
   }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    objEnv.enterNewScope();
+    objEnv.add(ASTConst.self, ASTConst.SELF_TYPE);
+    this.init.semant(clsTbl, objEnv, featEnv, currClsName);
+    objEnv.exitLastScope();
+
+    if (this.init instanceof NoExpr) {
+      return;
+    }
+
+    if (!clsTbl.isSubclass(this.init.getType()!, this.typeDecl, currClsName)) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid init expression of type ${this.init.getType()!} ` +
+          `is not a subtype of ${this.typeDecl}`,
+      );
+    }
+  }
 }
 
 export type Expressions = Expr[];
@@ -303,6 +407,15 @@ export class NoExpr extends Expr {
   }
 
   // No child nodes to traverse, so use base implementation
+
+  override semant(
+    _clsTbl: ClassTable,
+    _objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    _featEnv: FeatureEnvironment,
+    _currClsName: AbstractSymbol,
+  ): void {
+    this.setType(ASTConst.No_type);
+  }
 }
 
 /**
@@ -332,6 +445,22 @@ export class Block extends Expr {
       expr.forEach(callback);
     }
   }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    let returnType = ASTConst.No_type;
+
+    for (const expr of this.expressions) {
+      expr.semant(clsTbl, objEnv, featEnv, currClsName);
+      returnType = expr.getType()!;
+    }
+
+    this.setType(returnType);
+  }
 }
 
 /**
@@ -360,6 +489,46 @@ export class Assignment extends Expr {
     callback(this);
     this.expr.forEach(callback);
   }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    if (this.name === ASTConst.self) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid reserved attribute name ${ASTConst.self}`,
+      );
+      this.setType(ASTConst.err_type);
+      return;
+    }
+
+    const expectedType = objEnv.get(this.name);
+    if (expectedType === undefined) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid assignment to undefined variable ${this.name}`,
+      );
+      this.setType(ASTConst.err_type);
+      return;
+    }
+
+    this.expr.semant(clsTbl, objEnv, featEnv, currClsName);
+
+    if (!clsTbl.isSubclass(this.expr.getType()!, expectedType, currClsName)) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid assignment expression of type ${this.expr.getType()} ` +
+          `on variable of type ${expectedType}`,
+      );
+      this.setType(ASTConst.err_type);
+      return;
+    }
+
+    this.setType(this.expr.getType()!);
+  }
 }
 
 /**
@@ -368,7 +537,7 @@ export class Assignment extends Expr {
 export class StaticDispatch extends Expr {
   constructor(
     location: SourceLocation,
-    public expr: Expr,
+    public callerExpr: Expr,
     public typeName: AbstractSymbol,
     public name: AbstractSymbol,
     public args: Expressions,
@@ -379,7 +548,7 @@ export class StaticDispatch extends Expr {
   dumpWithTypes(n: number): string {
     let result = this.dumpLine(n);
     result += `${Utilities.pad(n)}_static_dispatch\n`;
-    result += this.expr.dumpWithTypes(n + 2);
+    result += this.callerExpr.dumpWithTypes(n + 2);
     result += `${Utilities.pad(n + 2)}${this.typeName.getString()}\n`;
     result += `${Utilities.pad(n + 2)}${this.name.getString()}\n`;
     result += `${Utilities.pad(n + 2)}(\n`;
@@ -396,9 +565,91 @@ export class StaticDispatch extends Expr {
 
   override forEach(callback: ASTVisitorCallback): void {
     callback(this);
-    this.expr.forEach(callback);
+    this.callerExpr.forEach(callback);
     for (const arg of this.args) {
       arg.forEach(callback);
+    }
+  }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.callerExpr.semant(clsTbl, objEnv, featEnv, currClsName);
+
+    if (this.typeName === ASTConst.SELF_TYPE) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid static dispatch: cannot dispatch from type ${ASTConst.SELF_TYPE}`,
+      );
+      this.setType(ASTConst.err_type);
+      return;
+    }
+
+    if (
+      !clsTbl.isSubclass(this.callerExpr.getType()!, this.typeName, currClsName)
+    ) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid static dispatch: caller of type ${this.callerExpr
+          .getType()!} ` +
+          `is not a subclass of ${this.typeName}`,
+      );
+    }
+
+    if (!featEnv.classHasMethod(this.typeName, this.name, currClsName)) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid method call on undefined method ${this.name} ` +
+          `for class ${this.typeName}`,
+      );
+      this.setType(ASTConst.err_type);
+      return;
+    }
+
+    const signature = featEnv.classGetMethodSignature(
+      this.typeName,
+      this.name,
+      currClsName,
+    );
+
+    this.setType(
+      signature.returnType === ASTConst.SELF_TYPE
+        ? this.callerExpr.getType()! // notice we use the caller type
+        : signature.returnType,
+    );
+
+    if (this.args.length !== signature.arguments.length) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid method ${this.typeName}.${this.name} call: ` +
+          `expected ${signature.arguments.length} argument${
+            signature.arguments.length == 1 ? "" : "s"
+          } ` + `but got ${this.args.length}`,
+      );
+      return;
+    }
+
+    for (let i = 0; i < this.args.length; i++) {
+      const argExpr = this.args[i];
+      argExpr.semant(clsTbl, objEnv, featEnv, currClsName);
+
+      if (
+        !clsTbl.isSubclass(
+          argExpr.getType()!,
+          signature.arguments[i].type,
+          currClsName,
+        )
+      ) {
+        ErrorLogger.semantError(
+          argExpr.location,
+          `invalid argument #${i}[${signature.arguments[i].name}]: ` +
+            `expected expression of type ${signature.arguments[i].type} but ` +
+            `got an expression of type ${argExpr.getType()}`,
+        );
+      }
     }
   }
 }
@@ -409,7 +660,7 @@ export class StaticDispatch extends Expr {
 export class DynamicDispatch extends Expr {
   constructor(
     location: SourceLocation,
-    public expr: Expr,
+    public callerExpr: Expr,
     public name: AbstractSymbol,
     public args: Expressions,
   ) {
@@ -419,7 +670,7 @@ export class DynamicDispatch extends Expr {
   dumpWithTypes(n: number): string {
     let result = this.dumpLine(n);
     result += `${Utilities.pad(n)}_dispatch\n`;
-    result += this.expr.dumpWithTypes(n + 2);
+    result += this.callerExpr.dumpWithTypes(n + 2);
     result += `${Utilities.pad(n + 2)}${this.name.getString()}\n`;
     result += `${Utilities.pad(n + 2)}(\n`;
 
@@ -435,9 +686,76 @@ export class DynamicDispatch extends Expr {
 
   override forEach(callback: ASTVisitorCallback): void {
     callback(this);
-    this.expr.forEach(callback);
+    this.callerExpr.forEach(callback);
     for (const arg of this.args) {
       arg.forEach(callback);
+    }
+  }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.callerExpr.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (
+      !featEnv.classHasMethod(
+        this.callerExpr.getType()!,
+        this.name,
+        currClsName,
+      )
+    ) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid method call on undefined method ${this.name} ` +
+          `for class ${this.callerExpr.getType()}`,
+      );
+      this.setType(ASTConst.err_type);
+      return;
+    }
+
+    const signature = featEnv.classGetMethodSignature(
+      this.callerExpr.getType()!,
+      this.name,
+      currClsName,
+    );
+
+    this.setType(
+      signature.returnType === ASTConst.SELF_TYPE
+        ? this.callerExpr.getType()!
+        : signature.returnType,
+    );
+
+    if (this.args.length !== signature.arguments.length) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid method ${this.callerExpr.getType()}.${this.name} call: ` +
+          `expected ${signature.arguments.length} argument${
+            signature.arguments.length == 1 ? "" : "s"
+          } ` + `but got ${this.args.length}`,
+      );
+      return;
+    }
+
+    for (let i = 0; i < this.args.length; i++) {
+      const argExpr = this.args[i];
+      argExpr.semant(clsTbl, objEnv, featEnv, currClsName);
+
+      if (
+        !clsTbl.isSubclass(
+          argExpr.getType()!,
+          signature.arguments[i].type,
+          currClsName,
+        )
+      ) {
+        ErrorLogger.semantError(
+          argExpr.location,
+          `invalid argument #${i}[${signature.arguments[i].name}]: ` +
+            `expected expression of type ${signature.arguments[i].type} but ` +
+            `got an expression of type ${argExpr.getType()}`,
+        );
+      }
     }
   }
 }
@@ -472,6 +790,33 @@ export class Conditional extends Expr {
     this.thenExpr.forEach(callback);
     this.elseExpr.forEach(callback);
   }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.predicate.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.predicate.getType() !== ASTConst.Bool) {
+      ErrorLogger.semantError(
+        this.location,
+        `predicate should be of type ${ASTConst.Bool} but there ` +
+          `is an expression of type ${this.predicate.getType()} instead`,
+      );
+    }
+
+    this.thenExpr.semant(clsTbl, objEnv, featEnv, currClsName);
+    this.elseExpr.semant(clsTbl, objEnv, featEnv, currClsName);
+
+    this.setType(
+      clsTbl.leastUpperBound(
+        this.thenExpr.getType()!,
+        this.elseExpr.getType()!,
+        currClsName,
+      ),
+    );
+  }
 }
 
 /**
@@ -500,6 +845,25 @@ export class Loop extends Expr {
     callback(this);
     this.predicate.forEach(callback);
     this.body.forEach(callback);
+  }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.predicate.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.predicate.getType() !== ASTConst.Bool) {
+      ErrorLogger.semantError(
+        this.location,
+        `predicate should be of type ${ASTConst.Bool} but there ` +
+          `is an expression of type ${this.predicate.getType()} instead`,
+      );
+    }
+
+    this.body.semant(clsTbl, objEnv, featEnv, currClsName);
+    this.setType(ASTConst.Object_);
   }
 }
 
@@ -536,6 +900,51 @@ export class TypeCase extends Expr {
       branch.forEach(callback);
     }
   }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.expr.semant(clsTbl, objEnv, featEnv, currClsName);
+
+    let first = true;
+    let returnType = ASTConst.No_type;
+    const seenTypes = new Set<AbstractSymbol>();
+
+    for (const branch of this.cases) {
+      if (seenTypes.has(branch.typeDecl)) {
+        ErrorLogger.semantError(
+          branch.location,
+          `duplicate type case check for type ${branch.typeDecl}`,
+        );
+        continue;
+      }
+
+      seenTypes.add(branch.typeDecl);
+
+      objEnv.enterNewScope();
+      objEnv.add(branch.name, branch.typeDecl);
+
+      branch.expr.semant(clsTbl, objEnv, featEnv, currClsName);
+
+      objEnv.exitLastScope();
+
+      if (first) {
+        first = false;
+        returnType = branch.expr.getType()!;
+      } else {
+        returnType = clsTbl.leastUpperBound(
+          returnType,
+          branch.expr.getType()!,
+          currClsName,
+        );
+      }
+    }
+
+    this.setType(returnType);
+  }
 }
 
 /**
@@ -569,6 +978,46 @@ export class Let extends Expr {
     this.init.forEach(callback);
     this.body.forEach(callback);
   }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    if (this.identifier === ASTConst.self) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid reserved variable name in let: ${ASTConst.self}`,
+      );
+      this.setType(ASTConst.err_type);
+      return;
+    }
+
+    this.init.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (
+      !(this.init instanceof NoExpr ||
+        clsTbl.isSubclass(this.init.getType()!, this.typeDecl, currClsName))
+    ) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid initialization expression of type ${this.init.getType()} ` +
+          `for variable ${this.identifier} of type ${this.typeDecl}`,
+      );
+
+      this.setType(ASTConst.err_type);
+      return;
+    }
+
+    objEnv.enterNewScope();
+    objEnv.add(this.identifier, this.typeDecl);
+
+    this.body.semant(clsTbl, objEnv, featEnv, currClsName);
+
+    objEnv.exitLastScope();
+
+    this.setType(this.body.getType()!);
+  }
 }
 
 /**
@@ -597,6 +1046,33 @@ export class Addition extends Expr {
     callback(this);
     this.e1.forEach(callback);
     this.e2.forEach(callback);
+  }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.e1.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.e1.getType() !== ASTConst.Int) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Int} on the left ` +
+          `hand side of addition but found expression of type ${this.e1.getType()} instead`,
+      );
+    }
+
+    this.e2.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.e2.getType() !== ASTConst.Int) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Int} on the right ` +
+          `hand side of addition but found expression of type ${this.e2.getType()} instead`,
+      );
+    }
+
+    this.setType(ASTConst.Int);
   }
 }
 
@@ -627,6 +1103,33 @@ export class Subtraction extends Expr {
     this.e1.forEach(callback);
     this.e2.forEach(callback);
   }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.e1.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.e1.getType() !== ASTConst.Int) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Int} on the left ` +
+          `hand side of subtraction but found expression of type ${this.e1.getType()} instead`,
+      );
+    }
+
+    this.e2.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.e2.getType() !== ASTConst.Int) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Int} on the right ` +
+          `hand side of subtraction but found expression of type ${this.e2.getType()} instead`,
+      );
+    }
+
+    this.setType(ASTConst.Int);
+  }
 }
 
 /**
@@ -655,6 +1158,33 @@ export class Multiplication extends Expr {
     callback(this);
     this.e1.forEach(callback);
     this.e2.forEach(callback);
+  }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.e1.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.e1.getType() !== ASTConst.Int) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Int} on the left ` +
+          `hand side of multiplication but found expression of type ${this.e1.getType()} instead`,
+      );
+    }
+
+    this.e2.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.e2.getType() !== ASTConst.Int) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Int} on the right ` +
+          `hand side of multiplication but found expression of type ${this.e2.getType()} instead`,
+      );
+    }
+
+    this.setType(ASTConst.Int);
   }
 }
 
@@ -685,6 +1215,33 @@ export class Division extends Expr {
     this.e1.forEach(callback);
     this.e2.forEach(callback);
   }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.e1.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.e1.getType() !== ASTConst.Int) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Int} on the left ` +
+          `hand side of division but found expression of type ${this.e1.getType()} instead`,
+      );
+    }
+
+    this.e2.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.e2.getType() !== ASTConst.Int) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Int} on the right ` +
+          `hand side of division but found expression of type ${this.e2.getType()} instead`,
+      );
+    }
+
+    this.setType(ASTConst.Int);
+  }
 }
 
 /**
@@ -710,6 +1267,24 @@ export class Negation extends Expr {
   override forEach(callback: ASTVisitorCallback): void {
     callback(this);
     this.expr.forEach(callback);
+  }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.expr.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.expr.getType() !== ASTConst.Int) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Int} on negation ` +
+          `but found expression of type ${this.expr.getType()} instead`,
+      );
+    }
+
+    this.setType(ASTConst.Int);
   }
 }
 
@@ -740,6 +1315,33 @@ export class LessThan extends Expr {
     this.e1.forEach(callback);
     this.e2.forEach(callback);
   }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.e1.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.e1.getType() !== ASTConst.Int) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Int} on the left ` +
+          `hand side of less than but found expression of type ${this.e1.getType()} instead`,
+      );
+    }
+
+    this.e2.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.e2.getType() !== ASTConst.Int) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Int} on the right ` +
+          `hand side of less than but found expression of type ${this.e2.getType()} instead`,
+      );
+    }
+
+    this.setType(ASTConst.Bool);
+  }
 }
 
 /**
@@ -768,6 +1370,33 @@ export class Equal extends Expr {
     callback(this);
     this.e1.forEach(callback);
     this.e2.forEach(callback);
+  }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.e1.semant(clsTbl, objEnv, featEnv, currClsName);
+    this.e2.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (
+      (this.e1.getType() === ASTConst.Int ||
+        this.e1.getType() === ASTConst.Str ||
+        this.e1.getType() === ASTConst.Bool ||
+        this.e2.getType() === ASTConst.Int ||
+        this.e2.getType() === ASTConst.Str ||
+        this.e2.getType() === ASTConst.Bool) &&
+      this.e1.getType() !== this.e2.getType()
+    ) {
+      ErrorLogger.semantError(
+        this.location,
+        `invalid equality comparison left hand side expresssion of type ` +
+          `${this.e1.getType()} cannot be compared with expression of type ${this.e2.getType()}`,
+      );
+    }
+
+    this.setType(ASTConst.Bool);
   }
 }
 
@@ -798,6 +1427,33 @@ export class LessThanOrEqual extends Expr {
     this.e1.forEach(callback);
     this.e2.forEach(callback);
   }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.e1.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.e1.getType() !== ASTConst.Int) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Int} on the left ` +
+          `hand side of less than or equal but found expression of type ${this.e1.getType()} instead`,
+      );
+    }
+
+    this.e2.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.e2.getType() !== ASTConst.Int) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Int} on the right ` +
+          `hand side of less than or equal but found expression of type ${this.e2.getType()} instead`,
+      );
+    }
+
+    this.setType(ASTConst.Bool);
+  }
 }
 
 /**
@@ -824,6 +1480,24 @@ export class Complement extends Expr {
     callback(this);
     this.expr.forEach(callback);
   }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.expr.semant(clsTbl, objEnv, featEnv, currClsName);
+    if (this.expr.getType() !== ASTConst.Bool) {
+      ErrorLogger.semantError(
+        this.location,
+        `expected expression of type ${ASTConst.Bool} on not ` +
+          `but found expression of type ${this.expr.getType()} instead`,
+      );
+    }
+
+    this.setType(ASTConst.Bool);
+  }
 }
 
 /**
@@ -846,7 +1520,14 @@ export class IntegerConstant extends Expr {
     return result;
   }
 
-  // No child nodes to traverse, so use base implementation
+  override semant(
+    _clsTbl: ClassTable,
+    _objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    _featEnv: FeatureEnvironment,
+    _currClsName: AbstractSymbol,
+  ): void {
+    this.setType(ASTConst.Int);
+  }
 }
 
 /**
@@ -869,7 +1550,14 @@ export class BooleanConstant extends Expr {
     return result;
   }
 
-  // No child nodes to traverse, so use base implementation
+  override semant(
+    _clsTbl: ClassTable,
+    _objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    _featEnv: FeatureEnvironment,
+    _currClsName: AbstractSymbol,
+  ): void {
+    this.setType(ASTConst.Bool);
+  }
 }
 
 /**
@@ -894,7 +1582,14 @@ export class StringConstant extends Expr {
     return result;
   }
 
-  // No child nodes to traverse, so use base implementation
+  override semant(
+    _clsTbl: ClassTable,
+    _objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    _featEnv: FeatureEnvironment,
+    _currClsName: AbstractSymbol,
+  ): void {
+    this.setType(ASTConst.Str);
+  }
 }
 
 /**
@@ -917,7 +1612,23 @@ export class New extends Expr {
     return result;
   }
 
-  // No child nodes to traverse, so use base implementation
+  override semant(
+    clsTbl: ClassTable,
+    _objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    _featEnv: FeatureEnvironment,
+    _currClsName: AbstractSymbol,
+  ): void {
+    if (!(this.typeName === ASTConst.SELF_TYPE || clsTbl.classExists(this.typeName))) {
+      ErrorLogger.semantError(
+        this.location,
+        `cannot create an object of undefined type ${this.typeName}`,
+      );
+      this.setType(ASTConst.err_type);
+      return;
+    }
+
+    this.setType(this.typeName);
+  }
 }
 
 /**
@@ -944,6 +1655,16 @@ export class IsVoid extends Expr {
     callback(this);
     this.expr.forEach(callback);
   }
+
+  override semant(
+    clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+  ): void {
+    this.expr.semant(clsTbl, objEnv, featEnv, currClsName);
+    this.setType(ASTConst.Bool);
+  }
 }
 
 /**
@@ -966,5 +1687,19 @@ export class ObjectReference extends Expr {
     return result;
   }
 
-  // No child nodes to traverse, so use base implementation
+  override semant(
+    _clsTbl: ClassTable,
+    objEnv: ScopedEnvironment<AbstractSymbol, AbstractSymbol>,
+    _featEnv: FeatureEnvironment,
+    _currClsName: AbstractSymbol,
+  ): void {
+    const typeFromEnv = objEnv.get(this.name);
+    if (typeFromEnv === undefined) {
+      ErrorLogger.semantError(this.location, `undefined variable ${this.name}`);
+      this.setType(ASTConst.err_type);
+      return;
+    }
+
+    this.setType(typeFromEnv);
+  }
 }

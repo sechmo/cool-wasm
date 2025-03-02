@@ -67,6 +67,10 @@ export class ClassTable {
     child: AbstractSymbol,
     parent: AbstractSymbol,
   ): boolean {
+    // to not propagate errors 
+    if (child === ASTConst.err_type || parent === ASTConst.err_type) return true;
+
+
     let currCls = child;
 
     while (currCls !== ASTConst.Object_ && currCls !== parent) {
@@ -128,6 +132,10 @@ export class ClassTable {
 
   private checkValidInheritance(): void {
     for (const [child, parent] of this.childToParent.entries()) {
+      if (child === ASTConst.Object_) {
+        continue;
+      }
+
       if (parent === ASTConst.Bool) {
         ErrorLogger.semantError(
           this.classNode(child).location,

@@ -17,7 +17,9 @@ export interface CoolActionDict<T> extends BaseActionDict<T> {
   ClassStatement_WithoutParent?: (this: NonterminalNode, arg0: NonterminalNode, arg1: NonterminalNode, arg2: TerminalNode, arg3: IterationNode, arg4: IterationNode, arg5: TerminalNode) => T;
   ClassStatement?: (this: NonterminalNode, arg0: NonterminalNode) => T;
   Feature?: (this: NonterminalNode, arg0: NonterminalNode) => T;
-  Attribute?: (this: NonterminalNode, arg0: NonterminalNode, arg1: TerminalNode, arg2: NonterminalNode, arg3: IterationNode, arg4: IterationNode) => T;
+  Attribute_WithInit?: (this: NonterminalNode, arg0: NonterminalNode, arg1: TerminalNode, arg2: NonterminalNode, arg3: TerminalNode, arg4: NonterminalNode) => T;
+  Attribute_WithoutInit?: (this: NonterminalNode, arg0: NonterminalNode, arg1: TerminalNode, arg2: NonterminalNode) => T;
+  Attribute?: (this: NonterminalNode, arg0: NonterminalNode) => T;
   Method?: (this: NonterminalNode, arg0: NonterminalNode, arg1: TerminalNode, arg2: NonterminalNode, arg3: TerminalNode, arg4: TerminalNode, arg5: NonterminalNode, arg6: TerminalNode, arg7: NonterminalNode, arg8: TerminalNode) => T;
   Formal?: (this: NonterminalNode, arg0: NonterminalNode, arg1: TerminalNode, arg2: NonterminalNode) => T;
   Expr?: (this: NonterminalNode, arg0: NonterminalNode) => T;
