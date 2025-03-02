@@ -4,7 +4,6 @@ import astSemantics from "./grammar/astSemantics.ts";
 import { ASTNode } from "./ast.ts";
 import { basename } from "@std/path";
 
-
 const parseFileToAST = (filePath: string) => {
   const contents = Deno.readTextFileSync(filePath);
   const match = grammar.match(contents);
@@ -14,15 +13,14 @@ const parseFileToAST = (filePath: string) => {
 
   const fileBasename = basename(filePath);
 
-  const ast =  astSemantics(match).toAST() as ASTNode;
+  const ast = astSemantics(match).toAST() as ASTNode;
 
   ast.forEach((n) => {
     n.location.filename = fileBasename;
-  })
+  });
 
   return ast;
-}
-
+};
 
 if (import.meta.main) {
   const filePath = "./test.cool";
