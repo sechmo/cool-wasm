@@ -3,6 +3,7 @@ import * as AST from "../ast.ts";
 import grammar from "./cool.ohm-bundle.js";
 import { SourceLocation } from "../util.ts";
 import { AbstractSymbol, AbstractTable } from "../abstractTable.ts";
+import * as ASTConst from '../astConstants.ts'
 
 const astSemantics = grammar.createSemantics();
 
@@ -117,7 +118,7 @@ astSemantics.addOperation<AST.ASTNode>("toAST", {
     return new AST.ClassStatement(
       this.getLoc(),
       className.getSymbol(),
-      null,
+      ASTConst.Object_,
       features.children.map((f) => f.toAST()),
     );
   },

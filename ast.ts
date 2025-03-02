@@ -116,7 +116,7 @@ export class ClassStatement extends ASTNode {
   constructor(
     location: SourceLocation,
     public name: AbstractSymbol,
-    public parentName: AbstractSymbol | null,
+    public parentName: AbstractSymbol,
     public features: Features,
   ) {
     super(location);
