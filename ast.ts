@@ -6,6 +6,7 @@ import { FeatureEnvironment } from "./featureEnvironment.ts";
 import { ScopedEnvironment } from "./scopedEnvironment.ts";
 import { SourceLocation, Utilities } from "./util.ts";
 import * as ASTConst from "./astConstants.ts";
+import { Sexpr, sexprToString } from "./cgen/cgenUtil.ts";
 
 /**
  * Callback type for AST traversal
@@ -103,6 +104,8 @@ export abstract class Feature extends ASTNode {
  * Program is the root of the AST
  */
 export class Program extends ASTNode {
+  private clsTbl?: ClassTable;
+  private featEnv?: FeatureEnvironment;
   constructor(location: SourceLocation, public classes: Classes) {
     super(location);
   }
@@ -133,11 +136,15 @@ export class Program extends ASTNode {
       return false;
     }
 
+    this.clsTbl = clsTbl;
+
     const featEnv = new FeatureEnvironment(clsTbl);
     if (ErrorLogger.anyError()) {
       ErrorLogger.error("Compilation halted due to static semantic errors");
       return false;
     }
+
+    this.featEnv = featEnv;
 
     for (const cls of this.classes) {
       cls.semant(clsTbl, featEnv);
@@ -149,6 +156,17 @@ export class Program extends ASTNode {
     }
 
     return true;
+  }
+
+  public cgen(): string {
+
+    const typeDefs = this.featEnv!.cgenTypeDefs();
+    const module: Sexpr = [
+      "module", 
+      typeDefs
+    ]
+
+    return sexprToString(module);
   }
 }
 

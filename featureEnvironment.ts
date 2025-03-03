@@ -4,10 +4,23 @@ import { ClassTable } from "./classTable.ts";
 import * as ASTConst from "./astConstants.ts";
 import { ErrorLogger } from "./errorLogger.ts";
 import { ScopedEnvironment } from "./scopedEnvironment.ts";
+import { Sexpr } from "./cgen/cgenUtil.ts";
 
+enum MethodOrigin {
+  NEW,
+  INHERITED,
+  OVERRIDEN,
+}
 export type MethodSignature = {
   arguments: Array<{ type: AbstractSymbol; name: AbstractSymbol }>;
   returnType: AbstractSymbol;
+  origin: MethodOrigin;
+  id: number,
+  cgen: {
+    signature: string;
+    implementation: string;
+    genericCaller: string;
+  };
 };
 
 type ClassSignatures = Map<AbstractSymbol, MethodSignature>;
@@ -21,6 +34,8 @@ export class FeatureEnvironment {
 
   private attributeTypes: Map<AbstractSymbol, ClassAttributeTypes>;
   private attributeNodes: Map<AbstractSymbol, ClassAttributeNodes>;
+
+  private methodCount: number = 0;
 
   constructor(private clsTbl: ClassTable) {
     this.methodSignatures = new Map();
@@ -55,7 +70,7 @@ export class FeatureEnvironment {
       if (feat instanceof Attribute) {
         this.addAttribute(feat, attributeTypes, cls.parentName);
       } else if (feat instanceof Method) {
-        this.addMethod(feat, signatures, cls.parentName);
+        this.addMethod(feat, signatures, cls.name, cls.parentName);
       }
     }
 
@@ -78,7 +93,19 @@ export class FeatureEnvironment {
     ) {
       if (signatures.has(methName)) continue; // do not propagate if overrided
 
-      signatures.set(methName, methSig);
+      const childSig: MethodSignature = {
+        arguments: methSig.arguments,
+        returnType: methSig.returnType,
+        origin: MethodOrigin.INHERITED, 
+        cgen: {
+          signature: methSig.cgen.signature,
+          implementation: methSig.cgen.implementation,
+          genericCaller: methSig.cgen.genericCaller,
+        },
+        id: methSig.id
+      }
+
+      signatures.set(methName, childSig);
     }
   }
 
@@ -118,9 +145,14 @@ export class FeatureEnvironment {
     attrTypes.set(attr.name, attr.typeDecl);
   }
 
+  private methodCounter(): number {
+    return this.methodCount++;
+  }
+
   private addMethod(
     meth: Method,
     signatures: ClassSignatures,
+    currCls: AbstractSymbol,
     parent: AbstractSymbol,
   ): void {
     const methArgs: MethodSignature["arguments"] = [];
@@ -184,29 +216,67 @@ export class FeatureEnvironment {
       return;
     }
 
-    const methSig = {
-      arguments: methArgs,
-      returnType: meth.returnType,
-    };
+    // const methSig = {
+    //   arguments: methArgs,
+    //   returnType: meth.returnType,
+    // };
 
-    if (this.checkMethodOverride(meth, methSig, parent)) {
-      signatures.set(meth.name, methSig);
+    const [valid, signature] = this.checkMethodOverride(
+      meth,
+      methArgs,
+      meth.returnType,
+      currCls,
+      parent,
+    );
+
+    // if (this.checkMethodOverride(meth, methSig, parent)) {
+    if (valid) {
+      signatures.set(meth.name, signature);
     }
   }
 
   private checkMethodOverride(
     meth: Method,
-    sig: MethodSignature,
+    args: MethodSignature["arguments"],
+    retType: AbstractSymbol,
+    currCls: AbstractSymbol,
     parent: AbstractSymbol,
-  ): boolean {
+  ): [boolean, MethodSignature] {
     if (!this.methodSignatures.get(parent)?.has(meth.name)) {
+      const sig: MethodSignature = {
+        arguments: args,
+        returnType: retType,
+        origin: MethodOrigin.NEW,
+        id: this.methodCounter(),
+        cgen: {
+          signature: `$${currCls}.${meth.name}.signature`,
+          implementation: `$${currCls}.${meth.name}.implementation`,
+          genericCaller: `$${currCls}.${meth.name}.generic`,
+        },
+      }
       // not an override
-      return true;
+      return [true, sig];
     }
+
+    // its an override
+
 
     const parentSig = this.methodSignatures.get(parent)?.get(
       meth.name,
     ) as MethodSignature;
+
+
+    const sig: MethodSignature = {
+      arguments: args, 
+      returnType: retType,
+      origin: MethodOrigin.OVERRIDEN, 
+      id: parentSig.id,
+      cgen: {
+        signature: parentSig.cgen.signature,
+        implementation: `$${currCls}.${meth.name}.implementation`,
+        genericCaller: parentSig.cgen.genericCaller
+      }
+    }
 
     // check signatures are equal
 
@@ -217,7 +287,7 @@ export class FeatureEnvironment {
           `${parent.getString()} has ${parentSig.arguments.length} arguments but only ` +
           `${sig.arguments.length} found`,
       );
-      return false;
+      return [false, sig];
     }
 
     let anyErr = false;
@@ -237,7 +307,7 @@ export class FeatureEnvironment {
       }
     }
 
-    return !anyErr;
+    return [!anyErr, sig];
   }
 
   public classAttributeEnvironment(
@@ -287,4 +357,72 @@ export class FeatureEnvironment {
     return this.methodSignatures.get(clsName)!.get(methName)!;
   }
 
+  public cgenTypeDefs(): Sexpr {
+    const recContext: Sexpr = ["rec"];
+
+    for (const cls of this.clsTbl.allClassNodes()) {
+      this.cgenClass(cls.name, recContext);
+    }
+
+    return recContext;
+  }
+
+  private cgenClass(clsName: AbstractSymbol, typeDefExpr: Sexpr): void {
+    // generate method signatures and vtable
+    const classTypeNameCgen = `$${clsName}`
+
+    const vtableMethodsUnsorted: [number,Sexpr][] = [];
+
+    const signatureTable = this.methodSignatures.get(clsName)!;
+    for (const [methName, signature] of signatureTable.entries()) {
+
+      vtableMethodsUnsorted.push([signature.id ,["field", `$${methName}`, ["ref", signature.cgen.signature]]])
+
+      if (signature.origin !== MethodOrigin.NEW) continue;
+
+      const retType = signature.returnType === ASTConst.SELF_TYPE ? classTypeNameCgen : `$${signature.returnType}`
+
+      const methSigWASM = [
+        "type",
+        signature.cgen.signature,
+        ["func",
+          ["param", ["ref", classTypeNameCgen]],
+          ...signature.arguments.map(({ type }) => ["param", ["ref", `$${type}`]]),
+          ["result", ["ref", retType]]
+        ]
+      ]
+
+      typeDefExpr.push(methSigWASM);
+    }
+
+    const vtableMethodsSorted = vtableMethodsUnsorted.toSorted((a,b) => a[0] - b[0]).map(v => v[1])
+
+    const parentName = this.clsTbl.parentCls(clsName);
+
+    /// add vtable
+    const vtableName = `$${clsName}#vtable`
+    let vtable;
+    if (clsName === ASTConst.Object_) {
+      vtable = [ "type", vtableName, ["sub", ["struct", ...vtableMethodsSorted ] ] ]
+    } else {
+      vtable = [ "type", vtableName, ["sub", `$${parentName}#vtable`, ["struct", ...vtableMethodsSorted ] ] ]
+    }
+
+    typeDefExpr.push(vtable)
+
+    // add class, without attributes for now
+    let clsStruct: Sexpr = [];
+    if (clsName === ASTConst.Object_) {
+      clsStruct = ["type", classTypeNameCgen, ["sub", ["struct",
+        ["field", "$vt", ["ref", vtableName]]
+      ]]]
+    } else {
+      clsStruct = ["type", classTypeNameCgen, ["sub", `$${parentName}`,["struct",
+        ["field", "$vt", ["ref", vtableName]]
+      ]]]
+    }
+
+    typeDefExpr.push(clsStruct);
+
+  }
 }

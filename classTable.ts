@@ -200,7 +200,7 @@ export class ClassTable {
     }
   }
 
-  private parentCls(clsName: AbstractSymbol): AbstractSymbol {
+  public parentCls(clsName: AbstractSymbol): AbstractSymbol {
     const parent = this.childToParent.get(clsName);
     if (parent !== undefined) return parent;
     throw `class with name ${clsName} does not exists`;
