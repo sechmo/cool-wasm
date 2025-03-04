@@ -27,3 +27,6 @@ export const str_field = AbstractTable.idTable.add("_str_field");
 export const substr = AbstractTable.idTable.add("substr");
 export const type_name = AbstractTable.idTable.add("type_name");
 export const val = AbstractTable.idTable.add("_val");
+export const i32 = AbstractTable.idTable.add("i32");
+export const chars = AbstractTable.idTable.add("chars");
+
