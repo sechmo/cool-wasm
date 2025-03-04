@@ -23,9 +23,14 @@ export type MethodSignature = {
   };
 };
 
+export type AttributeType = {
+  type: AbstractSymbol,
+  id: number,
+};
+
 type ClassSignatures = Map<AbstractSymbol, MethodSignature>;
 type ClassMethodNodes = Map<AbstractSymbol, Method>;
-type ClassAttributeTypes = Map<AbstractSymbol, AbstractSymbol>;
+type ClassAttributeTypes = Map<AbstractSymbol, AttributeType>;
 type ClassAttributeNodes = Map<AbstractSymbol, Attribute>;
 
 export class FeatureEnvironment {
@@ -36,6 +41,7 @@ export class FeatureEnvironment {
   private attributeNodes: Map<AbstractSymbol, ClassAttributeNodes>;
 
   private methodCount: number = 0;
+  private attributeCount: number = 0;
 
   constructor(private clsTbl: ClassTable) {
     this.methodSignatures = new Map();
@@ -109,6 +115,10 @@ export class FeatureEnvironment {
     }
   }
 
+  private attributeCounter(): number {
+    return this.attributeCount++;
+  }
+
   private addAttribute(
     attr: Attribute,
     attrTypes: ClassAttributeTypes,
@@ -142,7 +152,7 @@ export class FeatureEnvironment {
       return;
     }
 
-    attrTypes.set(attr.name, attr.typeDecl);
+    attrTypes.set(attr.name, { type: attr.typeDecl, id: this.attributeCounter() });
   }
 
   private methodCounter(): number {
@@ -323,7 +333,7 @@ export class FeatureEnvironment {
     for (
       const [attrName, attrType] of this.attributeTypes.get(clsName)!.entries()
     ) {
-      attrEnv.add(attrName, attrType);
+      attrEnv.add(attrName, attrType.type);
     }
 
     return attrEnv;
@@ -357,19 +367,21 @@ export class FeatureEnvironment {
     return this.methodSignatures.get(clsName)!.get(methName)!;
   }
 
-  public cgenTypeDefs(): Sexpr {
-    const recContext: Sexpr = ["rec"];
+  public cgenTypeDefs(): {typeDefBlock: Sexpr, programBlock: Sexpr } {
+    const typeDefBlock: Sexpr = ["rec"];
+    const programBlock: Sexpr = [];
 
     for (const cls of this.clsTbl.allClassNodes()) {
-      this.cgenClass(cls.name, recContext);
+      this.cgenClass(cls.name, typeDefBlock, programBlock);
     }
 
-    return recContext;
+    return { typeDefBlock: typeDefBlock , programBlock: programBlock};
   }
 
-  private cgenClass(clsName: AbstractSymbol, typeDefExpr: Sexpr): void {
+  private cgenClass(clsName: AbstractSymbol, typeDefBlock: Sexpr, programBlock: Sexpr): void {
     // generate method signatures and vtable
     const classTypeNameCgen = `$${clsName}`
+    const vtableName = `$${clsName}#vtable`
 
     const vtableMethodsUnsorted: [number,Sexpr][] = [];
 
@@ -382,17 +394,32 @@ export class FeatureEnvironment {
 
       const retType = signature.returnType === ASTConst.SELF_TYPE ? classTypeNameCgen : `$${signature.returnType}`
 
+      const argumentsSignature = signature.arguments.map(({ type, name }) => ["param", `$${name}`,["ref", `$${type}`]])
+
       const methSigWASM = [
         "type",
         signature.cgen.signature,
         ["func",
           ["param", ["ref", classTypeNameCgen]],
-          ...signature.arguments.map(({ type }) => ["param", ["ref", `$${type}`]]),
+          ...argumentsSignature,
           ["result", ["ref", retType]]
         ]
       ]
 
-      typeDefExpr.push(methSigWASM);
+      typeDefBlock.push(methSigWASM);
+
+      // when we find a new method we generate the generic caller function
+
+      programBlock.push(
+        [ "func", signature.cgen.genericCaller, ["param", "$v", ["ref", classTypeNameCgen]], ...argumentsSignature,["result",["ref", retType]],
+          ["local.get", "$v"], 
+          ...signature.arguments.map(({name}) => ["local.get", `$${name}`]),
+          ["local.get", "$v"], 
+          ["struct.get", classTypeNameCgen, "$vt"],
+          ["struct.get", vtableName, `$${methName}`],
+          ["call_ref", signature.cgen.signature],
+        ]
+      )
     }
 
     const vtableMethodsSorted = vtableMethodsUnsorted.toSorted((a,b) => a[0] - b[0]).map(v => v[1])
@@ -400,7 +427,6 @@ export class FeatureEnvironment {
     const parentName = this.clsTbl.parentCls(clsName);
 
     /// add vtable
-    const vtableName = `$${clsName}#vtable`
     let vtable;
     if (clsName === ASTConst.Object_) {
       vtable = [ "type", vtableName, ["sub", ["struct", ...vtableMethodsSorted ] ] ]
@@ -408,21 +434,43 @@ export class FeatureEnvironment {
       vtable = [ "type", vtableName, ["sub", `$${parentName}#vtable`, ["struct", ...vtableMethodsSorted ] ] ]
     }
 
-    typeDefExpr.push(vtable)
+    typeDefBlock.push(vtable)
+
+
+    const structAttributesUnsorted: [number, Sexpr][] = []
+    for (const [attrName, attrType] of this.attributeTypes.get(clsName)!.entries()) {
+      const field = ["field", `$${attrName}`, ["ref", `$${attrType.type}`]]
+      structAttributesUnsorted.push([attrType.id, field]);
+    }
+
+
+
+    const structAttributesSorted = structAttributesUnsorted.toSorted((a, b) => a[0] - b[0]).map(v => v[1]);
+
+    // built-it classes attributes
+    if (clsName === ASTConst.Int || clsName === ASTConst.Bool) {
+      structAttributesSorted.push(["field", `$val`, "i32"]);
+    }
+
+    if (clsName === ASTConst.Str) {
+      typeDefBlock.push(["type", "$charsArr", ["array", "i8"]]);
+      structAttributesSorted.push(["field", "$chars", ["ref", "$charsArr"]]);
+    }
+
 
     // add class, without attributes for now
     let clsStruct: Sexpr = [];
     if (clsName === ASTConst.Object_) {
       clsStruct = ["type", classTypeNameCgen, ["sub", ["struct",
-        ["field", "$vt", ["ref", vtableName]]
+        ["field", "$vt", ["ref", vtableName]], ...structAttributesSorted
       ]]]
     } else {
       clsStruct = ["type", classTypeNameCgen, ["sub", `$${parentName}`,["struct",
-        ["field", "$vt", ["ref", vtableName]]
+        ["field", "$vt", ["ref", vtableName]], ...structAttributesSorted
       ]]]
     }
 
-    typeDefExpr.push(clsStruct);
+    typeDefBlock.push(clsStruct);
 
   }
 }

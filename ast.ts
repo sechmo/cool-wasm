@@ -160,10 +160,11 @@ export class Program extends ASTNode {
 
   public cgen(): string {
 
-    const typeDefs = this.featEnv!.cgenTypeDefs();
+    const { typeDefBlock,programBlock } = this.featEnv!.cgenTypeDefs();
     const module: Sexpr = [
       "module", 
-      typeDefs
+      typeDefBlock, 
+      ...programBlock
     ]
 
     return sexprToString(module);

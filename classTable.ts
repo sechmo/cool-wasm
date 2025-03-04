@@ -266,7 +266,7 @@ export class ClassTable {
       ASTConst.Int,
       ASTConst.Object_,
       [
-        new Attribute(loc, ASTConst.val, ASTConst.prim_slot, new NoExpr(loc)),
+        // new Attribute(loc, ASTConst.val, ASTConst.prim_slot, new NoExpr(loc)),
       ],
     );
 
@@ -275,7 +275,7 @@ export class ClassTable {
       ASTConst.Bool,
       ASTConst.Object_,
       [
-        new Attribute(loc, ASTConst.val, ASTConst.prim_slot, new NoExpr(loc)),
+        // new Attribute(loc, ASTConst.val, ASTConst.prim_slot, new NoExpr(loc)),
       ],
     );
 
@@ -284,13 +284,13 @@ export class ClassTable {
       ASTConst.Str,
       ASTConst.Object_,
       [
-        new Attribute(loc, ASTConst.val, ASTConst.Int, new NoExpr(loc)),
-        new Attribute(
-          loc,
-          ASTConst.str_field,
-          ASTConst.prim_slot,
-          new NoExpr(loc),
-        ),
+        // new Attribute(loc, ASTConst.val, ASTConst.Int, new NoExpr(loc)),
+        // new Attribute(
+        //   loc,
+        //   ASTConst.str_field,
+        //   ASTConst.prim_slot,
+        //   new NoExpr(loc),
+        // ),
         new Method(loc, ASTConst.length, [], ASTConst.Int, new NoExpr(loc)),
         new Method(
           loc,
