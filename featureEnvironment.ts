@@ -378,9 +378,10 @@ export class FeatureEnvironment {
       if (c === ASTConst.Int) return 3;
       if (c === ASTConst.Bool) return 4;
 
-      return 5
-    }
-    const clsNames = [...this.clsTbl.allClassNodes()].map(c => c.name).toSorted((cls0, cls1) => priority(cls0) - priority(cls1))
+      return 5;
+    };
+    const clsNames = [...this.clsTbl.allClassNodes()].map((c) => c.name)
+      .toSorted((cls0, cls1) => priority(cls0) - priority(cls1));
 
     for (const cls of clsNames) {
       this.cgenClass(cls, typeDefBlock, programBlock);
@@ -398,11 +399,21 @@ export class FeatureEnvironment {
 
     programBlock.push([
       "func",
+      "$Object.new",
+      ["export", `"$Object.new"`],
+      ["result", ["ref", "$Object"]],
+      ["global.get", "$Object.vtable.canon"],
+      ["struct.new", "$Object"],
+    ]);
+
+    programBlock.push([
+      "func",
       "$String.length.implementation",
+      ["export", `"$String.length.implementation"`],
       ["type", "$String.length.signature"],
       ["param", "$s", ["ref", "$String"]],
       ["result", ["ref", "$Int"]],
-      ["global.get", "$Int.vtable.canon",],
+      ["global.get", "$Int.vtable.canon"],
       ["local.get", "$s"],
       ["struct.get", "$String", "$chars"],
       ["array.len"],
@@ -412,74 +423,150 @@ export class FeatureEnvironment {
     programBlock.push([
       "func",
       "$String.substr.implementation",
+      ["export", `"$String.substr.implementation"`],
       ["type", "$String.substr.signature"],
       ["param", "$s", ["ref", "$String"]],
       ["param", "$aInt", ["ref", "$Int"]],
       ["param", "$bInt", ["ref", "$Int"]],
       ["result", ["ref", "$String"]],
-
       ["local", "$diff", "i32"],
       ["local", "$res", ["ref", "$charsArr"]],
-
       ["local.get", "$bInt"],
       ["struct.get", "$Int", "$_val"],
+      ["array.new_default", "$charsArr"],
+      ["local.tee", "$res"],
+      ["i32.const", "0"],
+      ["local.get", "$s"],
+      ["struct.get", "$String", "$chars"],
       ["local.get", "$aInt"],
       ["struct.get", "$Int", "$_val"],
-      ["i32.sub"],
-      ["i32.const", "1"],
-      ["i32.add"],
-      ["local.tee", "$diff"],
-      ["i32.const", "0"],
-      ["i32.lt_s"],
-      ["if", ["then", ["i32.const", "0"], ["local.set", "$diff"]]],
-      ["local.get", "$diff"],
-      ["array.new_default", "$charsArr"],
-
-      ["local.tee", "$res"], // destination
-      ["i32.const", "0"], // destination offset
-
-      ["local.get", "$s"],
-      ["struct.get", "$String", "$chars"], // origin
-      ["local.get", "$aInt"],
-      ["struct.get", "$Int", "$_val"], // origin offset
-
-      ["local.get", "$diff"], // size
+      ["local.get", "$bInt"],
+      ["struct.get", "$Int", "$_val"],
       ["array.copy", "$charsArr", "$charsArr"],
-      ["global.get", "$String.vtable.canon",],
+      ["global.get", "$String.vtable.canon"],
       ["local.get", "$res"],
       ["struct.new", "$String"],
+    ]);
+
+    typeDefBlock.push([
+      "type",
+      "$String.helper.length.signature",
+      ["func", ["param", ["ref", "$String"]], ["result", "i32"]],
+    ]);
+
+    programBlock.push([
+      "func",
+      "$String.helper.length",
+      ["export", `"$String.helper.length"`],
+      ["type", "$String.helper.length.signature"],
+      ["param", "$s", ["ref", "$String"]],
+      ["result", "i32"],
+      ["local.get", "$s"],
+      ["struct.get", "$String", "$chars"],
+      ["array.len"],
     ]);
 
     programBlock.push([
       "func",
       "$String.concat.implementation",
+      ["export", `"$String.concat.implementation"`],
       ["type", "$String.concat.signature"],
       ["param", "$s0", ["ref", "$String"]],
       ["param", "$s1", ["ref", "$String"]],
       ["result", ["ref", "$String"]],
-      ["unreachable"],
+      // [";; (unreachable)"], // Comment line - removed as it doesn't fit JS array format
+      ["local", "$newChars", ["ref", "$charsArr"]],
+      ["local", "$lenS0", "i32"],
+      ["local", "$lenS1", "i32"],
+      ["local.get", "$s0"],
+      ["struct.get", "$String", "$chars"],
+      ["array.len"],
+      ["local.tee", "$lenS0"],
+      ["local.get", "$s1"],
+      ["struct.get", "$String", "$chars"],
+      ["array.len"],
+      ["local.tee", "$lenS1"],
+      ["i32.add"],
+      ["array.new_default", "$charsArr"],
+      ["local.tee", "$newChars"],
+      ["i32.const", "0"],
+      ["local.get", "$s0"],
+      ["struct.get", "$String", "$chars"],
+      ["i32.const", "0"],
+      ["local.get", "$lenS0"],
+      ["array.copy", "$charsArr", "$charsArr"],
+      ["local.get", "$newChars"],
+      ["local.get", "$lenS0"],
+      ["local.get", "$s1"],
+      ["struct.get", "$String", "$chars"],
+      ["i32.const", "0"],
+      ["local.get", "$lenS1"],
+      ["array.copy", "$charsArr", "$charsArr"],
+      ["global.get", "$String.vtable.canon"],
+      ["local.get", "$newChars"],
+      ["struct.new", "$String"],
+    ]);
+
+    typeDefBlock.push([
+      "type",
+      "$String.helper.charAt.signature",
+      ["func", ["param", ["ref", "$String"]], ["param", "i32"], [
+        "result",
+        "i32",
+      ]],
+    ]);
+    programBlock.push([
+      "func",
+      "$String.helper.charAt",
+      ["export", `"$String.helper.charAt"`],
+      ["type", "$String.helper.charAt.signature"],
+      ["param", "$s", ["ref", "$String"]],
+      ["param", "$i", "i32"],
+      ["result", "i32"],
+      ["local.get", "$s"],
+      ["struct.get", "$String", "$chars"],
+      ["local.get", "$i"],
+      ["array.get", "$charsArr"],
+    ]);
+
+    programBlock.push([
+      "func",
+      "$String.new",
+      ["export", `"$String.new"`],
+      ["result", ["ref", "$String"]],
+      ["global.get", "$String.vtable.canon"],
+      ["array.new_fixed", "$charsArr", "0"],
+      ["struct.new", "$String"],
     ]);
 
     programBlock.push([
       "func",
       "$IO.out_string.implementation",
+      ["export", `"$IO.out_string.implementation"`],
       ["type", "$IO.out_string.signature"],
-      ["param", ["ref", "$IO"]],
+      ["param", "$io", ["ref", "$IO"]],
       ["param", "$arg", ["ref", "$String"]],
       ["result", ["ref", "$IO"]],
-      ["unreachable"],
+      ["local.get", "$arg"],
+      ["ref.func", "$String.helper.length"],
+      ["ref.func", "$String.helper.charAt"],
+      ["call", "$outStringHelper"],
+      ["local.get", "$io"],
     ]);
 
     programBlock.push([
       "func",
       "$IO.out_int.implementation",
+      ["export", `"$IO.out_int.implementation"`],
       ["type", "$IO.out_int.signature"],
-      ["param", ["ref", "$IO"]],
+      ["param", "$io", ["ref", "$IO"]],
       ["param", "$arg", ["ref", "$Int"]],
       ["result", ["ref", "$IO"]],
-      ["unreachable"],
+      ["local.get", "$arg"],
+      ["call", "$Int.helper.toI32"],
+      ["call", "$outIntHelper"],
+      ["local.get", "$io"],
     ]);
-
 
     programBlock.push([
       "func",
@@ -490,7 +577,6 @@ export class FeatureEnvironment {
       ["unreachable"],
     ]);
 
-
     programBlock.push([
       "func",
       "$IO.in_int.implementation",
@@ -498,6 +584,37 @@ export class FeatureEnvironment {
       ["param", ["ref", "$IO"]],
       ["result", ["ref", "$Int"]],
       ["unreachable"],
+    ]);
+
+
+    programBlock.push([
+      "func",
+      "$IO.new",
+      ["export", `"$IO.new"`],
+      ["result", ["ref", "$IO"]],
+      ["global.get", "$IO.vtable.canon"],
+      ["struct.new", "$IO"],
+    ]);
+
+    programBlock.push([
+      "func",
+      "$Int.helper.toI32",
+      ["export", `"$Int.helper.toI32"`],
+      ["param", "$i", ["ref", "$Int"]],
+      ["result", "i32"],
+      ["local.get", "$i"],
+      ["struct.get", "$Int", "$_val"],
+    ]);
+
+    programBlock.push([
+      "func",
+      "$Int.helper.fromI32",
+      ["export", `"$Int.helper.fromI32"`],
+      ["param", "$i",  "i32"],
+      ["result",["ref", "$Int"]],
+      ["global.get", "$Int.vtable.canon"],
+      ["local.get", "$i"],
+      ["struct.new", "$Int"],
     ]);
 
     return { typeDefBlock: typeDefBlock, programBlock: programBlock };
@@ -524,7 +641,6 @@ export class FeatureEnvironment {
       "ref",
       signature.cgen.signature,
     ]]);
-
 
     sortedMethods.filter(([_, s]) => s.origin === MethodOrigin.NEW)
       .forEach(([methName, signature]) => {
@@ -558,6 +674,7 @@ export class FeatureEnvironment {
           [
             "func",
             signature.cgen.genericCaller,
+            ["export", `"${signature.cgen.genericCaller}"`], // to call from js
             ["param", "$v", ["ref", classTypeNameCgen]],
             ...argumentsSignature,
             ["result", ["ref", retType]],
@@ -569,7 +686,7 @@ export class FeatureEnvironment {
             ["call_ref", signature.cgen.signature],
           ],
         );
-    });
+      });
 
     const parentName = this.clsTbl.parentCls(clsName);
 
@@ -581,38 +698,42 @@ export class FeatureEnvironment {
         ...vtableDefMethodsSorted,
       ]]];
     } else {
-      vtableTypeDef = ["type", vtableTypeName, ["sub", `$${parentName}#vtable`, [
-        "struct",
-        ...vtableDefMethodsSorted,
-      ]]];
+      vtableTypeDef = ["type", vtableTypeName, [
+        "sub",
+        `$${parentName}#vtable`,
+        [
+          "struct",
+          ...vtableDefMethodsSorted,
+        ],
+      ]];
     }
 
     typeDefBlock.push(vtableTypeDef);
 
-    const canonVtableMethodRefs: Sexpr = sortedMethods.map(([methName, signature]) => {
-      let methImplName = signature.cgen.implementation
-      if (methName === ASTConst.type_name || methName === ASTConst.copy) {
-        methImplName  = `${classTypeNameCgen}.${methName}.implementation`
-      }
+    const canonVtableMethodRefs: Sexpr = sortedMethods.map(
+      ([methName, signature]) => {
+        let methImplName = signature.cgen.implementation;
+        if (methName === ASTConst.type_name || methName === ASTConst.copy) {
+          methImplName = `${classTypeNameCgen}.${methName}.implementation`;
+        }
 
-      return ["ref.func", methImplName]
-    }
-    )
+        return ["ref.func", methImplName];
+      },
+    );
 
-    const vtableCanon = 
-      ["global", `${classTypeNameCgen}.vtable.canon`, ["ref", vtableTypeName],
-        ...canonVtableMethodRefs, 
-      ["struct.new", vtableTypeName]
-      ]
+    const vtableCanon = [
+      "global",
+      `${classTypeNameCgen}.vtable.canon`,
+      ["ref", vtableTypeName],
+      ...canonVtableMethodRefs,
+      ["struct.new", vtableTypeName],
+    ];
     if (clsName === ASTConst.Str) {
-      programBlock.unshift(vtableCanon)
-
+      programBlock.unshift(vtableCanon);
     } else {
-      programBlock.push(vtableCanon)
-
+      programBlock.push(vtableCanon);
     }
 
-    
     // const structAttributesUnsorted: [number, Sexpr][] = [];
     // for (
     //   const [attrName, attrType] of this.attributeTypes.get(clsName)!.entries()
@@ -696,7 +817,8 @@ export class FeatureEnvironment {
 
     // add type name implementation
 
-    const {name: strConstName, sexpr: strConstExpr } = ConstantGenerator.stringConstantSexpr(clsName.toString())
+    const { name: strConstName, sexpr: strConstExpr } = ConstantGenerator
+      .stringConstantSexpr(clsName.toString());
 
     programBlock.push(strConstExpr);
     const typeNameImplementation = [
@@ -705,8 +827,8 @@ export class FeatureEnvironment {
       ["type", "$Object.type_name.signature"],
       ["param", "$o", ["ref", "$Object"]],
       ["result", ["ref", "$String"]],
-      ["global.get", strConstName]
-    ]
+      ["global.get", strConstName],
+    ];
 
     programBlock.push(typeNameImplementation);
   }

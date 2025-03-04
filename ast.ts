@@ -160,19 +160,35 @@ export class Program extends ASTNode {
 
   public cgen(): string {
     const headers = [
-      ["import", `"cool"`, `"abortTag"`, ["tag", "$abortTag", ["param", "i32"]]]
-    ]
-
-    const { typeDefBlock,programBlock } = this.featEnv!.cgenTypeDefs();
-    const moreProgram = this.classes.flatMap(c => c.cgen(this.featEnv!))
+      ["import", `"cool"`, `"abortTag"`, ["tag", "$abortTag", [
+        "param",
+        "i32",
+      ]]],
+      [
+        "import",
+        `"cool"`,
+        `"outStringHelper"`,
+        ["func", "$outStringHelper", ["param", ["ref", "$String"]], ["param", [
+          "ref",
+          "$String.helper.length.signature",
+        ]], ["param", ["ref", "$String.helper.charAt.signature"]]],
+      ],
+      [
+        "import",
+        `"cool"`,
+        `"outIntHelper"`,
+        ["func", "$outIntHelper", ["param", "i32"]],
+      ],
+    ];
+    const { typeDefBlock, programBlock } = this.featEnv!.cgenTypeDefs();
+    const moreProgram = this.classes.flatMap((c) => c.cgen(this.featEnv!));
     const module: Sexpr = [
-      "module", 
+      "module",
       ...headers,
-      typeDefBlock, 
+      typeDefBlock,
       ...programBlock,
       ...moreProgram,
-    ]
-
+    ];
 
     return sexprToString(module);
   }
@@ -235,7 +251,9 @@ export class ClassStatement extends ASTNode {
 
   public cgen(featEnv: FeatureEnvironment): Sexpr[] {
     // first create methodds
-    const methodImplementations = this.features.filter(f => f instanceof Method).map( m => m.cgen(featEnv, this.name))
+    const methodImplementations = this.features.filter((f) =>
+      f instanceof Method
+    ).map((m) => m.cgen(featEnv, this.name));
 
     return methodImplementations;
   }
@@ -308,12 +326,21 @@ export class Method extends Feature {
   }
 
   cgen(featEnv: FeatureEnvironment, currClsName: AbstractSymbol): Sexpr {
-    const signature = featEnv.classGetMethodSignature(currClsName, this.name, currClsName)
-    return ["func", signature.cgen.implementation, ["type", signature.cgen.signature],
+    const signature = featEnv.classGetMethodSignature(
+      currClsName,
+      this.name,
+      currClsName,
+    );
+    return [
+      "func",
+      signature.cgen.implementation,
+      ["type", signature.cgen.signature],
       ["param", "$self", ["ref", `$${currClsName}`]],
-      ...signature.arguments.map(arg => ["param", `$${arg.name}`, ["ref", `$${arg.type}`]]),
+      ...signature.arguments.map(
+        (arg) => ["param", `$${arg.name}`, ["ref", `$${arg.type}`]],
+      ),
       ["result", ["ref", `$${signature.returnType}`]],
-      ["unreachable"]
+      ["unreachable"],
     ];
   }
 }
@@ -1661,7 +1688,10 @@ export class New extends Expr {
     _featEnv: FeatureEnvironment,
     _currClsName: AbstractSymbol,
   ): void {
-    if (!(this.typeName === ASTConst.SELF_TYPE || clsTbl.classExists(this.typeName))) {
+    if (
+      !(this.typeName === ASTConst.SELF_TYPE ||
+        clsTbl.classExists(this.typeName))
+    ) {
       ErrorLogger.semantError(
         this.location,
         `cannot create an object of undefined type ${this.typeName}`,

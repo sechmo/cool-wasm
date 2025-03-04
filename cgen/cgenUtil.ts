@@ -26,7 +26,9 @@ export class ConstantGenerator {
     return {
       name: name, sexpr: [
         "global",
-        name, ["ref", "$String"],
+        name,
+        ["export", `"${name}"`],
+        ["ref", "$String"],
         ["global.get", "$String.vtable.canon",],
         ...vals.flatMap(([c,code]) => [`;; ${c}`, ["i32.const", `${code}`, ] ]),
         ["array.new_fixed", "$charsArr", `${s.length}`],
