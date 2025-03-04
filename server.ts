@@ -28,7 +28,7 @@ router.get("/", async (ctx) => {
     title: "Cool Code Editor",
     editorTitle: "Cool Editor",
     fileName: "main.cl",
-    defaultCode: `class Main inherits A2I {
+    defaultCode: `Class Main inherits A2I {
 	main (): Object {
 		(new IO).out_string(i2a(fact(a2i((new IO).in_string()))).concat("\n"));
 	};
