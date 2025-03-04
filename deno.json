@@ -1,6 +1,7 @@
 {
   "tasks": {
     "dev": "deno run --watch main.ts",
+    "serve": "deno run --watch --allow-net --allow-read --allow-import server.ts",
     "test-parser": "deno run --allow-read --allow-write  parser-test.ts"
   },
   "imports": {
@@ -10,6 +11,7 @@
     "@std/path": "jsr:@std/path@^1.0.8",
     "@types/diff": "npm:@types/diff@^7.0.1",
     "diff": "npm:diff@^7.0.0",
-    "ohm-js": "npm:ohm-js@^17.1.0"
+    "ohm-js": "npm:ohm-js@^17.1.0",
+    "wabt": "npm:wabt@^1.0.37"
   }
 }
