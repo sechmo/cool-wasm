@@ -617,6 +617,30 @@ export class FeatureEnvironment {
       ["struct.new", "$Int"],
     ]);
 
+
+    programBlock.push([
+      "func",
+      "$Bool.helper.toI32",
+      ["export", `"$Bool.helper.toI32"`],
+      ["param", "$i", ["ref", "$Bool"]],
+      ["result", "i32"],
+      ["local.get", "$i"],
+      ["struct.get", "$Bool", "$_val"],
+    ]);
+
+    programBlock.push([
+      "func",
+      "$Bool.helper.fromI32",
+      ["export", `"$Bool.helper.fromI32"`],
+      ["param", "$i",  "i32"],
+      ["result",["ref", "$Bool"]],
+      ["global.get", "$Bool.vtable.canon"],
+      ["local.get", "$i"],
+      ["struct.new", "$Bool"],
+    ]);
+
+    programBlock.push(...ConstantGenerator.booleanConstantsSexpr())
+
     return { typeDefBlock: typeDefBlock, programBlock: programBlock };
   }
 
