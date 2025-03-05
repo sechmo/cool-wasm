@@ -1,225 +1,265 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= it.title || "Deno Compiler Code Editor" %></title>
-  <!-- Tailwind CSS via CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            editor: {
-              bg: '#1e1e1e',
-              sidebar: '#252526',
-              highlight: '#2d2d2d',
-              text: '#d4d4d4',
-              line: '#858585',
-              active: '#1e1e1e',
-              border: '#3e3e3e',
-              green: '#4CAF50',
-              blue: '#007acc'
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <style type="text/tailwindcss">
-    @layer utilities {
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>
+		<%= it.title || "Deno Compiler Code Editor" %>
+	</title>
+	<!-- Tailwind CSS via CDN -->
+	<script src="https://cdn.tailwindcss.com"></script>
+	<script>
+		tailwind.config = {
+			darkMode: 'class',
+			theme: {
+				extend: {
+					colors: {
+						editor: {
+							bg: '#1e1e1e',
+							sidebar: '#252526',
+							highlight: '#2d2d2d',
+							text: '#d4d4d4',
+							line: '#858585',
+							active: '#1e1e1e',
+							border: '#3e3e3e',
+							green: '#4CAF50',
+							blue: '#007acc'
+						}
+					}
+				}
+			}
+		}
+	</script>
+	<style type="text/tailwindcss">
+		@layer utilities {
       .editor-shadow {
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
       }
     }
   </style>
 </head>
+
 <body class="dark bg-gray-900 h-screen flex flex-col">
-  <!-- Header/Navbar -->
-  <header class="bg-editor-sidebar border-b border-editor-border flex items-center px-4 py-2">
-    <div class="mx-auto text-editor-text font-medium"><%= it.editorTitle || "Deno Compiler Code Editor" %></div>
-  </header>
+	<!-- Header/Navbar -->
+	<header class="bg-editor-sidebar border-b border-editor-border flex items-center px-4 py-2">
+		<div class="mx-auto text-editor-text font-medium">
+			<%= it.editorTitle || "Deno Compiler Code Editor" %>
+		</div>
+	</header>
 
-  <!-- Main Content -->
-  <main class="flex flex-1 overflow-hidden">
+	<!-- Main Content -->
+	<main class="flex flex-1 overflow-hidden">
 
-    <!-- Editor Area -->
-    <div class="flex-1 flex flex-col md:flex-row">
-      <!-- Code Editor -->
-      <div class="flex-1 flex flex-col border-r border-editor-border">
-        <!-- Tab Bar -->
-        <div class="bg-editor-bg border-b border-editor-border flex items-center">
-          <div class="px-4 py-2 bg-editor-highlight text-editor-text border-r border-editor-border flex items-center">
-            <span><%= it.fileName || "main.cl" %></span>
-            <button class="ml-2 text-editor-line hover:text-editor-text">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-        
-        <!-- Line Numbers and Editor -->
-        <div class="flex-1 flex overflow-hidden">
-          <!-- Line Numbers -->
-          <div id="line-numbers"
-				class="bg-editor-bg text-editor-line text-right p-2 select-none w-12 overflow-y-hidden font-mono text-sm">
-				<div>1</div>
+		<!-- Editor Area -->
+		<div class="flex-1 flex flex-col md:flex-row">
+			<!-- Code Editor -->
+			<div class="flex-1 flex flex-col border-r border-editor-border">
+				<!-- Tab Bar -->
+				<div class="bg-editor-bg border-b border-editor-border flex items-center">
+					<div
+						class="px-4 py-2 bg-editor-highlight text-editor-text border-r border-editor-border flex items-center">
+						<span>
+							<%= it.fileName || "main.cl" %>
+						</span>
+						<button class="ml-2 text-editor-line hover:text-editor-text">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+								stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+									d="M6 18L18 6M6 6l12 12" />
+							</svg>
+						</button>
+					</div>
+				</div>
+
+				<!-- Line Numbers and Editor -->
+				<div class="flex-1 flex overflow-hidden">
+					<!-- Line Numbers -->
+					<div id="line-numbers"
+						class="bg-editor-bg text-editor-line text-right p-2 select-none w-12 overflow-y-hidden font-mono text-sm">
+						<div>1</div>
+					</div>
+
+					<!-- Text Editor -->
+					<textarea id="editor" onkeyup="updateLineNumbers()"
+						class="flex-1 bg-editor-bg text-editor-text p-2 outline-none resize-none font-mono text-sm"
+						spellcheck="false"><%= it.defaultCode  %></textarea>
+				</div>
+
+				<!-- Run Button -->
+				<div class="bg-editor-bg border-t border-editor-border p-2 flex justify-between items-center">
+					<div class="text-editor-text text-sm">
+						<span id="status">Ready</span>
+					</div>
+					<button id="run-button"
+						class="bg-editor-green hover:bg-green-600 text-white px-4 py-2 rounded flex items-center space-x-2">
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+							stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+								d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+								d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+						<span>Run</span>
+					</button>
+				</div>
 			</div>
-          
-          <!-- Text Editor -->
-          <textarea id="editor" class="flex-1 bg-editor-bg text-editor-text p-2 outline-none resize-none font-mono text-sm" spellcheck="false"><%= it.defaultCode  %></textarea>
-        </div>
 
-        <!-- Run Button -->
-        <div class="bg-editor-bg border-t border-editor-border p-2 flex justify-between items-center">
-          <div class="text-editor-text text-sm">
-            <span id="status">Ready</span>
-          </div>
-          <button id="run-button" class="bg-editor-green hover:bg-green-600 text-white px-4 py-2 rounded flex items-center space-x-2">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>Run</span>
-          </button>
-        </div>
-      </div>
+			<!-- Output Area -->
+			<div class="flex-1 flex flex-col">
+				<div class="bg-editor-bg border-b border-editor-border text-editor-text px-4 py-2 flex justify-between">
+					<span>Output</span>
+					<button id="clear-button" class="text-editor-text hover:text-white text-sm">
+						Clear
+					</button>
+				</div>
+				<div id="output"
+					class="flex-1 bg-editor-bg text-editor-text p-4 font-mono text-sm overflow-auto whitespace-pre">
+				</div>
+			</div>
+		</div>
+	</main>
 
-      <!-- Output Area -->
-      <div class="flex-1 flex flex-col">
-        <div class="bg-editor-bg border-b border-editor-border text-editor-text px-4 py-2 flex justify-between">
-          <span>Output</span>
-          <button id="clear-button" class="text-editor-text hover:text-white text-sm">
-            Clear
-          </button>
-        </div>
-        <div id="output" class="flex-1 bg-editor-bg text-editor-text p-4 font-mono text-sm overflow-auto whitespace-pre">
-          // Output will appear here after you click Run
-        </div>
-      </div>
-    </div>
-  </main>
+	<!-- Status Bar -->
+	<footer class="bg-editor-sidebar text-editor-text px-4 py-1 text-sm flex justify-between">
+		<div class="flex space-x-4">
+			<span>Cool</span>
+			<span>UTF-8</span>
+		</div>
+		<div class="flex space-x-4">
+			<span id="cursor-position">Ln 1, Col 1</span>
+			<span>Spaces: 4</span>
+		</div>
+	</footer>
 
-  <!-- Status Bar -->
-  <footer class="bg-editor-sidebar text-editor-text px-4 py-1 text-sm flex justify-between">
-    <div class="flex space-x-4">
-      <span>Cool</span>
-      <span>UTF-8</span>
-    </div>
-    <div class="flex space-x-4">
-		<span id="cursor-position">Ln 1, Col 1</span>
-      <span>Spaces: 4</span>
-    </div>
-  </footer>
-
-  <script>
-    // Get elements
-    const editor = document.getElementById('editor');
+	<script>
+		// Get elements
+		const editor = document.getElementById('editor');
 		const output = document.getElementById('output');
 		const runButton = document.getElementById('run-button');
 		const clearButton = document.getElementById('clear-button');
 		const statusElement = document.getElementById('status');
 		const cursorPostion = document.getElementById('cursor-position');
 		const lineNumbers = document.getElementById('line-numbers');
-		async function runWasm() {
-			const response = await fetch('fact.wasm');
+
+		async function parseWasm(code) {
+			const response = await fetch('/parse', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'text/plain',
+				},
+				body: JSON.stringify({ code: code }),
+			})
+			if (!response.ok) {
+				const error = await response.text();
+				output.textContent = error;
+				return null;
+			}
 			const buffer = await response.arrayBuffer();
 			const module = await WebAssembly.compile(buffer);
-			const instance = await WebAssembly.instantiate(module, {
-				env: {
-					int_to_string: (n) => {
-						const str = n.toString();
-						console.log("int_to_string:", str);
-						return str;
-					},
-					print_string: (ptr) => {
-						const memBuffer = instance.exports.memory.buffer;
-						const memView = new Uint8Array(memBuffer);
-						let str = "";
-						while (memView[ptr] !== 0) {
-							str += String.fromCharCode(memView[ptr]);
-							ptr++;
-						}
-						console.log(str);
-					},
-					display_result: (ptr) => {
-						console.log('display')
-						const memBuffer = instance.exports.memory.buffer;
-						const memView = new Uint8Array(memBuffer);
-						let str = "";
-						while (memView[ptr] !== 0) {
-							str += String.fromCharCode(memView[ptr]);
-							ptr++;
-						}
-						output.textContent = str;
-					}
-				}
-			});
-			// Ejecuta la función main
-			instance.exports.main();
+			return module;
 		}
 
-		function compileAndRun() {
+		async function runWasm(code) {
+			output.textContent = "";
+			const module = await parseWasm(code);
+			if (!module) {
+				return;
+			}
+			const abortTag = new WebAssembly.Tag({ parameters: ["i32"] });
+			const importObject = {
+				cool: {
+					abortTag: abortTag,
+					outStringHelper: (strRef, lenFun, charAtFun) => {
+						const len = lenFun(strRef);
+						let jsStr = "";
+						for (let i = 0; i < len; i++) {
+							jsStr += String.fromCharCode(charAtFun(strRef, i));
+						}
+						console.log(jsStr);
+						output.textContent += jsStr + "\n";
+					},
+					outIntHelper: (valAsNumber) => {
+						console.log(valAsNumber)
+						output.textContent += valAsNumber + "\n";
+					}
+				},
+				console,
+			};
+			const wasmInstance = await WebAssembly.instantiate(module, importObject);
+			// Ejecuta la función main
+			const strToJs = (s) => {
+				let str = "";
+				const len = wasmInstance.exports["$String.helper.length"](s);
+				for (let i = 0; i < len; i++) {
+					str += String.fromCharCode(
+						wasmInstance.exports["$String.helper.charAt"](s, i),
+					);
+				}
+				return str;
+			};
+
+			const s0 = wasmInstance.exports["$String.new"]();
+
+			const obj = wasmInstance.exports["$Object.new"]();
+
+			strToJs(wasmInstance.exports["$Object.type_name.generic"](obj))
+
+			const io = wasmInstance.exports["$IO.new"]();
+			const ioTypeName = wasmInstance.exports["$Object.type_name.generic"](io);
+			strToJs(ioTypeName);
+			wasmInstance.exports["$IO.out_string.generic"](io, ioTypeName);
+
+			const int = wasmInstance.exports["$Int.helper.fromI32"](1234);
+			const intTypeName = wasmInstance.exports["$Object.type_name.generic"](int)
+			strToJs(intTypeName);
+			wasmInstance.exports["$IO.out_int.generic"](io, int);
+		}
+
+		async function compileAndRun() {
 			// Update status
 			statusElement.textContent = "Compiling...";
 			statusElement.className = "text-yellow-500";
-			
+
 			// Disable run button during "compilation"
 			runButton.disabled = true;
 			runButton.classList.add('opacity-50');
-			
-			// Simulate compilation delay
-			setTimeout(() => {
-				// Get code from editor
-				const code = editor.value;
-				
-				// Simple validation
-				if (!code.trim()) {
+
+			const code = editor.value;
+
+			// Simple validation
+			if (!code.trim()) {
 				output.textContent = "Error: No code to compile";
 				statusElement.textContent = "Failed";
 				statusElement.className = "text-red-500";
 				runButton.disabled = false;
 				runButton.classList.remove('opacity-50');
 				return;
-				}
-				
-				// Simulate successful compilation
-				statusElement.textContent = "Running...";
-				
-				// Simulate execution delay
-				setTimeout(() => {
-				// For this demo, we'll just simulate the output based on the code
-				// In a real compiler, this would be the actual program output
-				
-				// Check if it's our sample C program
-				if (code.includes("Class Main")) {
-					// Run the WebAssembly module
-					runWasm();
-				} else {
-					// Just return the code as output
-					output.textContent = code;
-				}
-				
-				// Update status
-				statusElement.textContent = "Ready";
-				statusElement.className = "text-editor-text";
-				
-				// Re-enable run button
-				runButton.disabled = false;
-				runButton.classList.remove('opacity-50');
-				}, 500);
-			}, 1000);
 			}
-			
-			// Run button click handler
-			runButton.addEventListener('click', compileAndRun);
-			
-			// Clear button click handler
-			clearButton.addEventListener('click', function() {
-			output.textContent = "// Output will appear here after you click Run";
+
+			// Simulate successful compilation
+			statusElement.textContent = "Running...";
+
+			// For this demo, we'll just simulate the output based on the code
+			// In a real compiler, this would be the actual program output
+
+			await runWasm(code);
+
+			// Update status
+			statusElement.textContent = "Ready";
+			statusElement.className = "text-editor-text";
+
+			// Re-enable run button
+			runButton.disabled = false;
+			runButton.classList.remove('opacity-50');
+		}
+
+		// Run button click handler
+		runButton.addEventListener('click', compileAndRun);
+
+		// Clear button click handler
+		clearButton.addEventListener('click', function () {
+			output.textContent = "";
 		});
 
 		function updateLineNumbers() {
@@ -239,6 +279,7 @@
 		}
 
 		document.addEventListener('DOMContentLoaded', updateLineNumbers);
-  </script>
+	</script>
 </body>
+
 </html>

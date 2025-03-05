@@ -1,12 +1,19 @@
-import wabt from 'wabt';
+import binaryen from "binaryen";
 
-const wast = await Deno.readFile('fact.wat')
-const wastT = new TextDecoder().decode(wast)
+export function convertWatToWasm(wat: string): Uint8Array {
+	const myModule = binaryen.parseText(wat);
 
-const wabtModule = await wabt();
+	myModule.optimize();
+	myModule.setFeatures(
+		binaryen.Features.BulkMemory |
+		binaryen.Features.GC |
+		binaryen.Features.ReferenceTypes |
+		binaryen.Features.ExceptionHandling |
+		binaryen.Features.Multivalue,
+	);
 
-const parsed = wabtModule.parseWat('fact.wat', wastT);
-const { buffer } = parsed.toBinary({ log: true });
+	console.log(myModule.emitText());
+	const wasm = myModule.emitBinary();
 
-await Deno.writeFile('fact.wasm', buffer);
-console.log('Wasm file generated!')
+	return wasm;
+}
