@@ -8,6 +8,11 @@ import { SourceLocation, Utilities } from "./util.ts";
 import * as ASTConst from "./astConstants.ts";
 import { ConstantGenerator, Sexpr, sexprToString } from "./cgen/cgenUtil.ts";
 
+let labelCounter = 0;
+function generateLabel(): string {
+  return `$label${labelCounter++}`;
+}
+
 /**
  * Callback type for AST traversal
  */
@@ -909,7 +914,9 @@ export class StaticDispatch extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenArgs = this.args.flatMap((a) => a.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock));
+    const cgenCaller = this.callerExpr.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [...cgenCaller, ...cgenArgs, ["call", `$${this.typeName}.${this.name}`]]
   }
 }
 
@@ -1024,7 +1031,9 @@ export class DynamicDispatch extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenArgs = this.args.flatMap((a) => a.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock));
+    const cgenCaller = this.callerExpr.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [...cgenCaller, ...cgenArgs, ["call", `$${this.callerExpr.getType()}.${this.name}`]]
   }
 }
 
@@ -1092,7 +1101,12 @@ export class Conditional extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const thenBlock = this.thenExpr.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    const elseBlock = this.elseExpr.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [
+      ...this.predicate.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock),
+      ["if", ["result", "i32"], ["local.get", "$"], ["then", ...thenBlock], ["else", ...elseBlock], ["end"]],
+    ]
   }
 }
 
@@ -1149,7 +1163,17 @@ export class Loop extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const bodyBlock = this.body.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    const loopLabel = generateLabel();
+    const endLabel = generateLabel();
+    return [
+      ["loop", loopLabel],
+      ...this.predicate.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock),
+      ["if", ["local.get", "$t0"], ["then", loopLabel], ["else", endLabel]],
+      ...bodyBlock,
+      ["br", loopLabel],
+      ["label", endLabel],
+    ];
   }
 }
 
@@ -1320,7 +1344,9 @@ export class Let extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenInit = this.init.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    const cgenBody = this.body.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [...cgenInit, ...cgenBody];
   }
 }
 
@@ -1385,7 +1411,14 @@ export class Addition extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenE1 = this.e1.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    const cgenE2 = this.e2.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [...cgenE1,
+      ["call", "$Int.helper.toI32"],
+      ...cgenE2, 
+      ["call", "$Int.helper.toI32"],
+      ["i32.add"]
+    ];
   }
 }
 
@@ -1450,7 +1483,15 @@ export class Subtraction extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenE1 = this.e1.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    const cgenE2 = this.e2.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [
+      ...cgenE1,
+      ["call", "$Int.helper.toI32"],
+      ...cgenE2,
+      ["call", "$Int.helper.toI32"],
+      ["i32.sub"]
+    ];
   }
 }
 
@@ -1515,7 +1556,15 @@ export class Multiplication extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenE1 = this.e1.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    const cgenE2 = this.e2.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [
+      ...cgenE1,
+      ["call", "$Int.helper.toI32"],
+      ...cgenE2,
+      ["call", "$Int.helper.toI32"],
+      ["i32.mul"]
+    ];
   }
 }
 
@@ -1580,7 +1629,15 @@ export class Division extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenE1 = this.e1.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    const cgenE2 = this.e2.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [
+      ...cgenE1,
+      ["call", "$Int.helper.toI32"],
+      ...cgenE2,
+      ["call", "$Int.helper.toI32"],
+      ["i32.div_s"]
+    ];
   }
 }
 
@@ -1633,7 +1690,13 @@ export class Negation extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenExpr = this.expr.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [
+      ...cgenExpr,
+      ["call", "$Int.helper.toI32"],
+      ["i32.const", "0"],
+      ["i32.sub"]
+    ];
   }
 }
 
@@ -1698,7 +1761,16 @@ export class LessThan extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenE1 = this.e1.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    const cgenE2 = this.e2.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [
+      ...cgenE1,
+      ["call", "$Int.helper.toI32"],
+      ...cgenE2,
+      ["call", "$Int.helper.toI32"],
+      ["i32.lt_s"],
+      ["call", "$Bool.helper.fromI32"]
+    ];
   }
 }
 
@@ -1828,7 +1900,16 @@ export class LessThanOrEqual extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenE1 = this.e1.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    const cgenE2 = this.e2.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [
+      ...cgenE1,
+      ["call", "$Int.helper.toI32"],
+      ...cgenE2,
+      ["call", "$Int.helper.toI32"],
+      ["i32.le_s"],
+      ["call", "$Bool.helper.fromI32"]
+    ];
   }
 }
 
@@ -1881,7 +1962,13 @@ export class Complement extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenExpr = this.expr.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [
+      ...cgenExpr,
+      ["call", "$Int.helper.toI32"],
+      ["i32.eqz"],
+      ["call", "$Bool.helper.fromI32"]
+    ];
   }
 }
 
@@ -1960,7 +2047,7 @@ export class BooleanConstant extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    return [["i32.const", this.value ? "1" : "0"]]
   }
 }
 
