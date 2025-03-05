@@ -741,7 +741,7 @@ export class Block extends Expr {
 export class Assignment extends Expr {
   constructor(
     location: SourceLocation,
-    public name: AbstractSymbol,
+    public identifier: AbstractSymbol,
     public expr: Expr,
   ) {
     super(location);
@@ -750,7 +750,7 @@ export class Assignment extends Expr {
   dumpWithTypes(n: number): string {
     let result = this.dumpLine(n);
     result += `${Utilities.pad(n)}_assign\n`;
-    result += `${Utilities.pad(n + 2)}${this.name.getString()}\n`;
+    result += `${Utilities.pad(n + 2)}${this.identifier.getString()}\n`;
     result += this.expr.dumpWithTypes(n + 2);
     result += this.dumpType(n);
 
@@ -768,7 +768,7 @@ export class Assignment extends Expr {
     featEnv: FeatureEnvironment,
     currClsName: AbstractSymbol,
   ): void {
-    if (this.name === ASTConst.self) {
+    if (this.identifier === ASTConst.self) {
       ErrorLogger.semantError(
         this.location,
         `invalid reserved attribute name ${ASTConst.self}`,
@@ -777,11 +777,11 @@ export class Assignment extends Expr {
       return;
     }
 
-    const expectedType = objEnv.get(this.name);
+    const expectedType = objEnv.get(this.identifier);
     if (expectedType === undefined) {
       ErrorLogger.semantError(
         this.location,
-        `invalid assignment to undefined variable ${this.name}`,
+        `invalid assignment to undefined variable ${this.identifier}`,
       );
       this.setType(ASTConst.err_type);
       return;
@@ -809,8 +809,26 @@ export class Assignment extends Expr {
     beforeExprBlock: Sexpr[],
   ): Sexpr[] {
     const cgenExpr = this.expr.cgen(featEnv, constEnv, varOrEnv,  currClsName, beforeExprBlock,);
+    
+    const {origin} = varOrEnv.get(this.identifier)!
 
-    return [...cgenExpr, ["local.get", "$"]]
+    if (origin === VarOrigin.LOCAL) {
+      return [
+        ...cgenExpr,
+        ["local.tee", `$${this.identifier}`]
+      ];
+    }
+    else if (origin === VarOrigin.CLASS) {
+      return [
+        ["local.get", "$self"],
+        ...cgenExpr,
+        ["struct.set", `$${currClsName}`,`$${this.identifier}`],
+        ["local.get", "$self"],
+        ["struct.get", `$${currClsName}`,`$${this.identifier}`],
+      ]
+    }
+
+    throw "invalid origin in assignment";
   }
 }
 

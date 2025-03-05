@@ -64,7 +64,8 @@ class Main inherits IO{
     (new C)@A.testMeth(); -- this should print first "testMeth.A" and then "testMeth.C"
     (new TestClass).retInt();
     let x: Int <- 999 in let propI: Int <- x in propI;
-    let c: C <- new C in c.testLet(c,c,c, 80, type_name()); -- should print "Main" and return 80
+    let c: C <- new C in let c: Int <- c.testLet(c,c,c, 80, type_name()) in {c<- 99; c; }; -- should print "Main" and return 99
+    {propS <- "cat"; propS.length(); }; -- 3
     }
   };
 };
