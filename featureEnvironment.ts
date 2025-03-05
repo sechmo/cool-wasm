@@ -501,6 +501,84 @@ export class FeatureEnvironment {
 
     programBlock.push([
       "func",
+      "$String.helper.equal",
+      ["export", `"$String.helper.equal"`],
+      ["param", "$s0", ["ref","null", "$String"]],
+      ["param", "$s1", ["ref","null", "$String"]],
+      ["result", ["ref", "$Bool"]],
+      ["local", "$chars0", ["ref", "$charsArr"]],
+      ["local", "$chars1", ["ref", "$charsArr"]],
+      ["local", "$i", "i32"],
+      ["local", "$len", "i32"],
+      ["i32.const", "0"],
+      ["local.set", "$i"],
+      ["local.get", "$s0"],
+      ["struct.get", "$String", "$chars"],
+      ["local.set", "$chars0"],
+      ["local.get", "$s1"],
+      ["struct.get", "$String", "$chars"],
+      ["local.set", "$chars1"],
+      // compare lengths
+      // not (s0.len === s1.len)
+      ["local.get", "$chars0"],
+      ["array.len"],
+      ["local.get", "$chars1"],
+      ["array.len"],
+      ["local.tee", "$len"],
+      ["i32.eq"],
+      ["i32.eqz"], 
+      ["if", // if different lengths, don't even compare
+        ["then", 
+          ["global.get", ConstantGenerator.falseConstName],
+          ["return"],
+        ],
+      ],
+      ["local.get", "$len"],
+      ["i32.eqz"], 
+      ["if", // empty strings
+        ["then", 
+          ["global.get", ConstantGenerator.trueConstName],
+          ["return"],
+        ],
+      ],
+      ["loop", "$loop.$String.helper.equal",
+        // ["result", ["ref", "$Bool"]],
+        ["local.get", "$i"],
+        ["local.get", "$len"],
+        ["i32.lt_s"],
+        ["if",
+          ["then",
+            ["local.get", "$chars0"],
+            ["local.get", "$i"],
+            ["array.get", "$charsArr"],
+
+            ["local.get", "$chars1"],
+            ["local.get", "$i"],
+            ["array.get", "$charsArr"],
+            ["i32.eq"],
+            ["i32.eqz"], 
+            ["if", // if different lengths, don't even compare
+              ["then", 
+                ["global.get", ConstantGenerator.falseConstName],
+                ["return"],
+              ],
+            ],
+            ["i32.const", "1"],
+            ["local.get", "$i"],
+            ["i32.add"],
+            ["local.set", "$i"],
+            ["br",  "$loop.$String.helper.equal"]
+          ],
+          ["else",
+            ["global.get", ConstantGenerator.trueConstName],
+            ["return"],
+          ],
+        ]
+      ]
+    ]);
+
+    programBlock.push([
+      "func",
       "$String.concat.implementation",
       ["export", `"$String.concat.implementation"`],
       ["type", "$String.concat.signature"],
@@ -696,6 +774,99 @@ export class FeatureEnvironment {
       ["local.get", "$i"],
       ["struct.new", "$Bool"],
     ]);
+
+    programBlock.push([
+      "func",
+      "$Int.helper.equal",
+      ["export", `"$Bool.helper.equal"`],
+      ["param", "$i0", ["ref", "null", "$Int"]],
+      ["param", "$i1", ["ref","null",  "$Int"]],
+      ["result", ["ref", "$Bool"]],
+      ["local.get", "$i0"],
+      ["struct.get", "$Int", "$_val"],
+      ["local.get", "$i1"],
+      ["struct.get", "$Int", "$_val"],
+      ["i32.eq"],
+      ["call","$Bool.helper.fromI32"],
+    ]);
+
+
+    programBlock.push([
+      "func",
+      "$Bool.helper.equal",
+      ["export", `"$Int.helper.equal"`],
+      ["param", "$i0", ["ref","null",  "$Bool"]],
+      ["param", "$i1", ["ref","null",  "$Bool"]],
+      ["result", ["ref", "$Bool"]],
+      ["local.get", "$i0"],
+      ["struct.get", "$Bool", "$_val"],
+      ["local.get", "$i1"],
+      ["struct.get", "$Bool", "$_val"],
+      ["i32.eq"],
+      ["call","$Bool.helper.fromI32"],
+    ]);
+
+    programBlock.push([
+      "func",
+      "$Object.helper.equal",
+      ["export", `"$Object.helper.equal"`],
+      ["param", "$o0", ["ref","null", "$Object"]],
+      ["param", "$o1", ["ref","null", "$Object"]],
+      ["result", ["ref", "$Bool"]],
+      // check references
+      ["local.get", "$o0"],
+      ["local.get", "$o1"],
+      ["ref.eq"],
+      ["if",
+        ["then",
+          ["global.get", ConstantGenerator.trueConstName],
+          ["return"],
+        ],
+      ],
+      // different refs, check contents
+      // if first is string second too
+      ["local.get", "$o0"],
+      ["ref.test",["ref", "null", "$String"]],
+      ["if",
+        ["then",
+          ["local.get", "$o0"],
+          ["ref.cast",["ref", "null", "$String"]],
+          ["local.get", "$o1"],
+          ["ref.cast",["ref", "null", "$String"]],
+          ["call", "$String.helper.equal"],
+          ["return"],
+        ],
+      ],
+      // if first is int second too
+      ["local.get", "$o0"],
+      ["ref.test",["ref", "null", "$Int"]],
+      ["if",
+        ["then",
+          ["local.get", "$o0"],
+          ["ref.cast",["ref", "null", "$Int"]],
+          ["local.get", "$o1"],
+          ["ref.cast",["ref", "null", "$Int"]],
+          ["call", "$Int.helper.equal"],
+          ["return"],
+        ],
+      ],
+      // if first is bool second too
+      ["local.get", "$o0"],
+      ["ref.test",["ref", "null", "$Bool"]],
+      ["if",
+        ["then",
+          ["local.get", "$o0"],
+          ["ref.cast",["ref", "null", "$Bool"]],
+          ["local.get", "$o1"],
+          ["ref.cast",["ref", "null", "$Bool"]],
+          ["call", "$Bool.helper.equal"],
+          ["return"],
+        ],
+      ],
+
+      // it was not Str or Int or Bool
+      ["global.get", ConstantGenerator.falseConstName],
+    ])
 
     programBlock.push(...ConstantGenerator.booleanConstantsSexpr());
 

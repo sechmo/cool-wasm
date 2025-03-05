@@ -1965,13 +1965,20 @@ export class Equal extends Expr {
     this.setType(ASTConst.Bool);
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cge1 = this.e1.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    const cge2 = this.e2.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+
+    return [
+      ...cge1,
+      ...cge2,
+      ["call", "$Object.helper.equal"]
+    ];
   }
 }
 

@@ -19,6 +19,8 @@ class TestClass inherits IO {
   };
 };
 
+class X {};
+
 class A inherits IO {
   testMeth(): Object {
     {
@@ -44,6 +46,12 @@ class C inherits B {
         out_string(x);
         a;
       }
+  };
+  str1(): String {
+    "xy"
+  };
+  str2(): String {
+    "x".concat("y")
   };
 };
 
@@ -77,6 +85,19 @@ class Main inherits IO{
     {propS <- "cat"; propS.length(); }; -- 3
     (new TestClass).testLoop(5); -- ~32
     if isvoid propNoInit then 1 else 0 fi; -- 1
+    if 10 = 10 then 1 else 0 fi; -- 1
+    propI <- 77;
+    if propI = 77 then 77 else 0 fi; -- 77
+    if "abc" = "a".concat("b").concat("c") then 99 else 0 fi; -- 99
+    (
+      let b: B <- new C, a:A <- b in 
+      if a = b then 88 else 0 fi
+    ); -- 88
+    if "x" = "y" then 0 else 11111 fi; -- 11111
+    if false = false then 6666 else 0 fi; -- 6666
+    (let void1: IO, void2: X in 
+    if void1 = void2 then 1010101 else 0 fi -- 1010101
+    );
     }
   };
 };
