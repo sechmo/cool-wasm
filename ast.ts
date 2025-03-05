@@ -589,6 +589,20 @@ export class Attribute extends Feature {
   ): Sexpr[] {
     const nameCgen = `$${this.typeDecl}`;
     if (this.init instanceof NoExpr) {
+
+      if (this.typeDecl === ASTConst.Str) {
+        return [["call", "$String.new"]]
+      }
+
+      if (this.typeDecl === ASTConst.Int) {
+        return [["call", "$Int.new"]]
+      }
+
+      if (this.typeDecl === ASTConst.Bool) {
+        return [["call", "$Bool.new"]]
+      }
+
+
       return [["ref.null", nameCgen]];
     }
     varOrEnv.enterNewScope();
@@ -1604,9 +1618,16 @@ export class Let extends Expr {
 
     let cgInit;
     if (this.init instanceof NoExpr) {
-      cgInit = [["ref.null", `$${this.typeDecl}`]];
-    }
-    else {
+      if (this.typeDecl === ASTConst.Str) {
+        cgInit = [["call", "$String.new"]]
+      } else if(this.typeDecl === ASTConst.Int) {
+        cgInit = [["call", "$Int.new"]]
+      } else if (this.typeDecl === ASTConst.Bool) {
+        cgInit = [["call", "$Bool.new"]]
+      } else {
+        cgInit = [["ref.null", `$${this.typeDecl}`]];
+      }
+    } else {
       cgInit = this.init.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
     }
     const letFuncArgs: Sexpr[] = currScope

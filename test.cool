@@ -70,7 +70,10 @@ class C inherits B {
 class Main inherits IO{
   propI: Int <- 10;
   propS: String <- "Test";
-  propNoInit: String;
+  propNoInit: C;
+  defaultStr: String;
+  defaultInt: Int;
+  defaultBool: Bool;
   main(): Int {
     {"constant string";
     42; 
@@ -138,6 +141,10 @@ class Main inherits IO{
         c: C => new C;
       esac
     ).retStr().length(); -- 2
+    if defaultStr = "" then 898989 else 0  fi;-- 898989
+    if defaultInt = 0 then 7373 else 0  fi;-- 7373
+    if defaultBool then 0 else 1212  fi;-- 1212
+    if isvoid defaultBool then 0 else 434343 fi; -- 434343
     }
   };
 };

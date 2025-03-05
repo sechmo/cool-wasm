@@ -763,7 +763,7 @@ export class FeatureEnvironment {
       "func",
       "$Bool.helper.toI32",
       ["export", `"$Bool.helper.toI32"`],
-      ["param", "$i", ["ref", "$Bool"]],
+      ["param", "$i", ["ref","null", "$Bool"]],
       ["result", "i32"],
       ["local.get", "$i"],
       ["struct.get", "$Bool", "$_val"],
