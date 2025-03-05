@@ -631,6 +631,26 @@ export class FeatureEnvironment {
       // nothing to initialize actually
     ]);
 
+
+    programBlock.push([
+      "func",
+      "$Int.new",
+      ["export", `"$Int.new"`],
+      ["result", ["ref", "$Int"]],
+      ["global.get", "$Int.vtable.canon"],
+      ["i32.const", "0"],
+      ["struct.new", "$Int"],
+    ]);
+
+
+    programBlock.push([
+      "func",
+      "$Bool.new",
+      ["export", `"$Bool.new"`],
+      ["result", ["ref", "$Bool"]],
+      ["global.get", ConstantGenerator.falseConstName],
+    ]);
+
     programBlock.push([
       "func",
       "$Int.helper.toI32",

@@ -1,5 +1,5 @@
 class TestClass inherits IO {
-  someProp: TestClass; 
+  --someProp: IO <- out_string("testing"); 
   heyAnAttr: Int <- 32 + 21;
   aMethod(): TestClass {
     self
@@ -7,7 +7,7 @@ class TestClass inherits IO {
 };
 
 class Main inherits IO{
-  propI: Int <- 3;
+  propI: Int <- 10;
   propS: String <- "Test";
   propNoInit: String;
   main(): Int {
@@ -19,7 +19,17 @@ class Main inherits IO{
     10 - 20; 
     20 * 15; 
     3 / 2;
-    ~ 24 / 32 + 1 * (42 - ~ 9);
+    ~ 24 / 32 + 1 * (42 - ~ 9); -- 51
+    if propI < 10 then 1 else 0 fi;  -- 0
+    if propI <= 10 then 1 else 0 fi; -- 1
+    if not 1 < ~1 then 1 else 0 fi; -- 1
+    if not 1 <= 1 then 1 else 0 fi; -- 0
+    if true then 1 else 0 fi; -- 1
+    if false then 0 else 1 fi; -- 1
+    new TestClass;
+    new Int; -- 0
+    if new Bool then 0 else 1 fi; -- 1
+
     }
   };
 };

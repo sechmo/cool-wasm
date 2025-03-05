@@ -76,7 +76,7 @@ export class ConstantGenerator {
       ["export", `"${this.trueConstName}"`],
       ["ref", "$Bool"],
       ["global.get", "$Bool.vtable.canon"],
-      ["i32.const", "0"],
+      ["i32.const", "1"],
       ["struct.new", "$Bool"],
     ];
 

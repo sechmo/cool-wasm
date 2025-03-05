@@ -1083,13 +1083,32 @@ export class Conditional extends Expr {
     );
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgPred = this.predicate.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    const cgThen = this.thenExpr.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    const cgElse = this.elseExpr.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+
+    return [
+      ...cgPred,
+      ["call", "$Bool.helper.toI32"],
+      ["if", 
+        ["result", ["ref", "null", `$${this.getType()}`]],
+        [
+          "then",
+       ...cgThen,
+        ], 
+        [
+          "else",
+          ...cgElse,
+      ]
+      ]
+    ]
+
   }
 }
 
@@ -1732,13 +1751,22 @@ export class LessThan extends Expr {
     this.setType(ASTConst.Bool);
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cge0 = this.e1.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    const cge2 = this.e2.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    return [
+      ...cge0,
+      ["call", "$Int.helper.toI32"],
+      ...cge2,
+      ["call", "$Int.helper.toI32"],
+      ["i32.lt_s"],
+      ["call", "$Bool.helper.fromI32"],
+    ]
   }
 }
 
@@ -1862,13 +1890,22 @@ export class LessThanOrEqual extends Expr {
     this.setType(ASTConst.Bool);
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cge0 = this.e1.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    const cge2 = this.e2.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    return [
+      ...cge0,
+      ["call", "$Int.helper.toI32"],
+      ...cge2,
+      ["call", "$Int.helper.toI32"],
+      ["i32.le_s"],
+      ["call", "$Bool.helper.fromI32"],
+    ]
   }
 }
 
@@ -1915,13 +1952,19 @@ export class Complement extends Expr {
     this.setType(ASTConst.Bool);
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cge = this.expr.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    return [
+      ...cge,
+      ["call", "$Bool.helper.toI32"],
+      ["i32.eqz"],
+      ["call", "$Bool.helper.fromI32"],
+    ]
   }
 }
 
@@ -2000,7 +2043,9 @@ export class BooleanConstant extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    return [
+      ["global.get", this.value ? ConstantGenerator.trueConstName : ConstantGenerator.falseConstName]
+    ]
   }
 }
 
@@ -2093,7 +2138,9 @@ export class New extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    return [
+      ["call", `$${this.typeName}.new`]
+    ]
   }
 }
 
