@@ -63,6 +63,19 @@ export class ClassTable {
     return this.childToParent.has(clsName);
   }
 
+  public distanceFromParent(child: AbstractSymbol, parent: AbstractSymbol): number {
+    if (child === ASTConst.err_type || parent === ASTConst.err_type) return -1;
+
+    let distance = 0;
+    let currCls = child;
+    while (currCls !== ASTConst.Object_ && currCls !== parent) {
+      currCls = this.parentCls(currCls);
+      distance++;
+    }
+
+    return currCls === parent ? distance : -1;
+  }
+
   private isSubclassNoSelfType(
     child: AbstractSymbol,
     parent: AbstractSymbol,

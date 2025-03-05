@@ -28,15 +28,27 @@ class A inherits IO {
       testMeth();
     }
   };
+
+  retStr(): String {
+    "A"
+  };
 };
 class B inherits A {
   testMeth(): Object {
     out_string("testMeth.B")
   };
+  retStr(): String {
+    "BB"
+  };
 };
 
 
 class C inherits B {
+
+
+  retStr(): String {
+    "CCC"
+  };
   testMeth(): Object {
     out_string("testMeth.C")
   };
@@ -98,6 +110,34 @@ class Main inherits IO{
     (let void1: IO, void2: X in 
     if void1 = void2 then 1010101 else 0 fi -- 1010101
     );
+    (
+      case 10 of 
+        i: Int => new C;
+        s: String => new B;
+        o: Object => new A;
+      esac
+    ).retStr().length(); -- 3
+    (
+      case self of 
+        i: Int => new C;
+        s: String => new B;
+        o: Object => new A;
+      esac
+    ).retStr().length(); -- 1
+    (
+      case new C of 
+        a: A => new A;
+        b: B => new B;
+        c: C => new C;
+      esac
+    ).retStr().length(); -- 3
+    (
+      case new B of 
+        a: A => new A;
+        b: B => new B;
+        c: C => new C;
+      esac
+    ).retStr().length(); -- 2
     }
   };
 };

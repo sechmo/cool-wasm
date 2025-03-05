@@ -250,6 +250,11 @@ export class FeatureEnvironment {
     }
   }
 
+
+  public distanceFromParent(child: AbstractSymbol, parent: AbstractSymbol): number {
+    return this.clsTbl.distanceFromParent(child, parent);
+  }
+
   private checkMethodOverride(
     meth: Method,
     args: MethodSignature["arguments"],

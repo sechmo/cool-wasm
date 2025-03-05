@@ -629,6 +629,62 @@ export class Branch extends ASTNode {
     callback(this);
     this.expr.forEach(callback);
   }
+
+  private static branchFuncCount = 0;
+  private static nextBranchFuncName(): string {
+    return `$branchFunc${this.branchFuncCount++}`
+  }
+  
+  public cgen(
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    caseExprVarName: string,
+    beforeExprBlock: Sexpr[],
+  ): Sexpr[] {
+      const branchFuncName = Branch.nextBranchFuncName();
+      
+
+      varOrEnv.enterNewScope()
+      varOrEnv.add(this.name, { origin: VarOrigin.LOCAL, type: this.typeDecl });
+      const cgenBody = this.expr.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+      const currScope = [...varOrEnv.currenScope().entries()];
+      varOrEnv.exitLastScope();
+
+
+      const branchFuncParams: Sexpr[] = currScope
+        .filter(([_, { origin }]) => origin === VarOrigin.LOCAL)
+        .map(([name, {type}]) => ["param", `$${name}`, ["ref", "null", `$${type}`]])
+
+
+      const branchFunc = [
+        "func", branchFuncName,
+        ...branchFuncParams,
+        // ["param", `$${this.identifier}`, ["ref", "null", `$${this.typeDecl}`]], // already in scoope
+        ["result", ["ref", "null", `$${this.expr.getType()}`]],
+        ...cgenBody,
+      ];
+
+      beforeExprBlock.push(branchFunc)
+
+      const cgInit = [
+        ["local.get", caseExprVarName],
+        ["ref.cast", ["ref", "null", `$${this.typeDecl}`]]
+      ];
+
+
+      const branchFuncArgs: Sexpr[] = currScope
+        .filter(([_, { origin }]) => origin === VarOrigin.LOCAL)
+        .flatMap(([name, _]) => name === this.name ?  cgInit: [ ["local.get", `$${name}`] ])
+
+      const branchFuncCall = [
+        ...branchFuncArgs,
+        ["call", branchFuncName]
+      ];
+
+    return branchFuncCall
+  }
 }
 
 export type Cases = Branch[];
@@ -1341,14 +1397,102 @@ export class TypeCase extends Expr {
 
     this.setType(returnType);
   }
+
+
+  private static caseFuncCount = 0;
+  private static nextCaseFuncName(): string {
+    return `$caseFunc${this.caseFuncCount++}`
+  }
+
+
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+
+    const orderedBranches =
+      this.cases
+        .map<[number, Branch]>(b => [featEnv.distanceFromParent(b.typeDecl, ASTConst.Object_), b])
+        .toSorted(([d0,_0], [d1,_1]) => d0 - d1)
+        .reverse() // fartherst first
+        .map(([_,b])=>b)
+
+
+    // const code = [
+    //   ...this.expr.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock)
+    // ];
+
+    // for (const this of orderedBranches) {
+
+    //   const typeCheck = [
+    //     ["ref.test",["ref", "null", "$String"]],
+    //   ]
+
+
+    // }
+
+    const caseVar = AbstractTable.idTable.add("caseVar");
+    const caseVarName = `$${caseVar}`
+
+
+
+    varOrEnv.enterNewScope()
+    varOrEnv.add(caseVar, { origin: VarOrigin.LOCAL, type: ASTConst.Object_ });
+    // const cgenBody = this.body.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    const cgenBody: Sexpr = orderedBranches.flatMap((b) => {
+      return [
+        ["local.get", caseVarName],
+        ["ref.test", ["ref", "null",`$${b.typeDecl}`]],
+        ["if",
+          // ["result", ["ref", "null", `$${this.getType()}`]],
+          ["then",
+            ...b.cgen(featEnv, constEnv, varOrEnv, currClsName, caseVarName, beforeExprBlock),
+            ["return"]
+          ],
+        ],
+      ]
+    })
+
+    cgenBody.push(["unreachable"])
+
+    const currScope = [...varOrEnv.currenScope().entries()];
+    varOrEnv.exitLastScope();
+
+
+    const caseFuncName = TypeCase.nextCaseFuncName()
+
+    const caseFuncParams: Sexpr[] = currScope
+      .filter(([_, { origin }]) => origin === VarOrigin.LOCAL)
+      .map(([name, {type}]) => ["param", `$${name}`, ["ref", "null", `$${type}`]])
+
+    const caseFunc = [
+      "func", caseFuncName,
+      ...caseFuncParams,
+      // ["param", `$${this.identifier}`, ["ref", "null", `$${this.typeDecl}`]], // already in scoope
+      ["result", ["ref", "null", `$${this.getType()}`]],
+      ...cgenBody,
+    ];
+
+    beforeExprBlock.push(caseFunc)
+
+    const cgInit = this.expr.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    
+    const caseFuncArgs: Sexpr[] = currScope
+      .filter(([_, { origin }]) => origin === VarOrigin.LOCAL)
+      .flatMap(([name, _]) => name === caseVar ?  cgInit: [ ["local.get", `$${name}`] ])
+
+
+
+    const caseFuncCall = [
+      ...caseFuncArgs,
+      ["call", caseFuncName]
+    ];
+
+    return caseFuncCall;
+  
   }
 }
 
