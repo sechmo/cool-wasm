@@ -1,5 +1,5 @@
-import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
-import { renderFile } from "https://deno.land/x/eta@v1.12.3/mod.ts";
+import { Application, Router } from "oak";
+import { renderFile } from "eta";
 // @ts-types="./grammar/cool.ohm-bundle.d.ts"
 import grammar from "./grammar/cool.ohm-bundle.js";
 import { basename } from "@std/path";

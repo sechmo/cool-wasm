@@ -13,6 +13,8 @@
     "diff": "npm:diff@^7.0.0",
     "ohm-js": "npm:ohm-js@^17.1.0",
     "wabt": "npm:wabt@^1.0.37",
-    "binaryen": "npm:binaryen@^122.0.0"
+    "binaryen": "npm:binaryen@^122.0.0",
+    "eta": "npm:eta@^1.12.3",
+    "oak": "npm:@oakserver/oak@^12.6.1"
   }
 }
