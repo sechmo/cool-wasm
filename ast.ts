@@ -449,8 +449,6 @@ export class Method extends Feature {
     const beforeBlock: Sexpr[] = [];
 
     const bodyCgenExprs = this.body.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeBlock);
-    console.error("in method", bodyCgenExprs)
-
 
     const method = [
       "func",
@@ -464,7 +462,6 @@ export class Method extends Feature {
       ...bodyCgenExprs,
     ];
 
-    console.error("final method", method);
 
     return [...beforeBlock, method];
   }
@@ -1379,13 +1376,22 @@ export class Addition extends Expr {
     this.setType(ASTConst.Int);
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cge0 = this.e1.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    const cge2 = this.e2.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    return [
+      ...cge0,
+      ["call", "$Int.helper.toI32"],
+      ...cge2,
+      ["call", "$Int.helper.toI32"],
+      ["i32.add"],
+      ["call", "$Int.helper.fromI32"],
+    ]
   }
 }
 
@@ -1444,13 +1450,22 @@ export class Subtraction extends Expr {
     this.setType(ASTConst.Int);
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cge0 = this.e1.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    const cge2 = this.e2.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    return [
+      ...cge0,
+      ["call", "$Int.helper.toI32"],
+      ...cge2,
+      ["call", "$Int.helper.toI32"],
+      ["i32.sub"],
+      ["call", "$Int.helper.fromI32"],
+    ]
   }
 }
 
@@ -1509,13 +1524,22 @@ export class Multiplication extends Expr {
     this.setType(ASTConst.Int);
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cge0 = this.e1.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    const cge2 = this.e2.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    return [
+      ...cge0,
+      ["call", "$Int.helper.toI32"],
+      ...cge2,
+      ["call", "$Int.helper.toI32"],
+      ["i32.mul"],
+      ["call", "$Int.helper.fromI32"],
+    ]
   }
 }
 
@@ -1574,13 +1598,22 @@ export class Division extends Expr {
     this.setType(ASTConst.Int);
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cge0 = this.e1.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    const cge2 = this.e2.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    return [
+      ...cge0,
+      ["call", "$Int.helper.toI32"],
+      ...cge2,
+      ["call", "$Int.helper.toI32"],
+      ["i32.div_s"],
+      ["call", "$Int.helper.fromI32"],
+    ]
   }
 }
 
@@ -1627,13 +1660,20 @@ export class Negation extends Expr {
     this.setType(ASTConst.Int);
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cge = this.expr.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    return [
+      ["i32.const", "0"],
+      ...cge,
+      ["call", "$Int.helper.toI32"],
+      ["i32.sub"],
+      ["call", "$Int.helper.fromI32"],
+    ]
   }
 }
 

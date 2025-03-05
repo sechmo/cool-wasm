@@ -1,36 +1,36 @@
-const abortTag = new WebAssembly.Tag({ parameters: ["i32"] });
+// const abortTag = new WebAssembly.Tag({ parameters: ["i32"] });
 
-const importObject = {
-  cool: {
-    abortTag: abortTag,
-    outStringHelper: (strRef, lenFun, charAtFun) => {
-      const len = lenFun(strRef);
-      let jsStr = "";
-      for (let i = 0; i < len; i++) {
-        jsStr += String.fromCharCode(charAtFun(strRef, i));
-      }
+// const importObject = {
+//   cool: {
+//     abortTag: abortTag,
+//     outStringHelper: (strRef, lenFun, charAtFun) => {
+//       const len = lenFun(strRef);
+//       let jsStr = "";
+//       for (let i = 0; i < len; i++) {
+//         jsStr += String.fromCharCode(charAtFun(strRef, i));
+//       }
 
-      console.log('>>>>', jsStr);
-    },
-    outIntHelper: (valAsNumber) => {
-      console.log('>>>>', valAsNumber)
-    }
-  },
-  console,
-};
+//       console.log('>>>>', jsStr);
+//     },
+//     outIntHelper: (valAsNumber) => {
+//       console.log('>>>>', valAsNumber)
+//     }
+//   },
+//   console,
+// };
 
-// const rawModule = Deno.readFileSync("./test.wasm");
-const rawModule = Deno.readFileSync("./static/genTest.wasm");
-const wasmModule = new WebAssembly.Module(rawModule);
-const wasmInstance = new WebAssembly.Instance(wasmModule, importObject);
+// // const rawModule = Deno.readFileSync("./test.wasm");
+// const rawModule = Deno.readFileSync("./static/genTest.wasm");
+// const wasmModule = new WebAssembly.Module(rawModule);
+// const wasmInstance = new WebAssembly.Instance(wasmModule, importObject);
 
-console.log(
-  Deno.inspect(wasmInstance.exports, {
-    depth: 20,
-    iterableLimit: 10000,
-    colors: true,
-  }),
-);
+// console.log(
+//   Deno.inspect(wasmInstance.exports, {
+//     depth: 20,
+//     iterableLimit: 10000,
+//     colors: true,
+//   }),
+// );
 
 
 
@@ -106,6 +106,12 @@ console.log(
 //   }
 // }
 
+
+// @ts-types="./grammar/cool.ohm-bundle.d.ts"
+import grammar from "./grammar/cool.ohm-bundle.js";
+import { basename } from "@std/path";
+import astSemantics from "./grammar/astSemantics.ts";
+import { ASTNode, Program } from "./ast.ts";
 
 const parseFileToAST = (filePath: string) => {
   const contents = Deno.readTextFileSync(filePath);

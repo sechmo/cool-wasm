@@ -1,16 +1,25 @@
--- class TestClass inherits IO {
---   someProp: TestClass; 
---   heyAnAttr: Int <- 32 + 21;
---   aMethod(): TestClass {
---     self
---   };
--- };
+class TestClass inherits IO {
+  someProp: TestClass; 
+  heyAnAttr: Int <- 32 + 21;
+  aMethod(): TestClass {
+    self
+  };
+};
 
-class Main {
+class Main inherits IO{
   propI: Int <- 3;
   propS: String <- "Test";
   propNoInit: String;
   main(): Int {
-    {"constant string";42; propI;}
+    {"constant string";
+    42; 
+    propI; 
+    -- out_int(20/3);
+    8 + 19; 
+    10 - 20; 
+    20 * 15; 
+    3 / 2;
+    ~ 24 / 32 + 1 * (42 - ~ 9);
+    }
   };
 };
