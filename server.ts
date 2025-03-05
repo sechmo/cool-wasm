@@ -72,6 +72,11 @@ router.post("/parse", async (ctx) => {
   try {
     const ast = parseFileToAST(code) as Program;
     ast.semant();
+
+    if (ErrorLogger.anyError()) {
+      throw ErrorLogger.fullErrorMsg();
+    }
+
     const codeGen = ast.cgen();
     const wasm = convertWatToWasm(codeGen);
     ctx.response.body = wasm;
@@ -95,6 +100,9 @@ router.post("/wat", async (ctx) => {
   try {
     const ast = parseFileToAST(code) as Program;
     ast.semant();
+    if (ErrorLogger.anyError()) {
+      throw ErrorLogger.fullErrorMsg();
+    }
     const codeGen = ast.cgen();
     ctx.response.body = codeGen;
     ctx.response.type = "text/plain";
