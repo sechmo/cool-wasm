@@ -1243,14 +1243,22 @@ export class Loop extends Expr {
   ): Sexpr[] {
     const bodyBlock = this.body.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
     const loopLabel = generateLabel();
-    const endLabel = generateLabel();
     return [
-      ["loop", loopLabel],
-      ...this.predicate.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock),
-      ["if", ["local.get", "$t0"], ["then", loopLabel], ["else", endLabel]],
-      ...bodyBlock,
-      ["br", loopLabel],
-      ["label", endLabel],
+      ["loop", loopLabel,
+        ["result", ["ref", "null", `$${this.getType()}`]],
+        ...this.predicate.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock),
+        ["call", "$Bool.helper.toI32"],
+        ["if", 
+          ["result", ["ref", "null", `$${this.getType()}`]],
+          ["then",
+            ...bodyBlock,
+            ["br", loopLabel],
+          ],
+          ["else",
+            ["call", "$Object.new"]
+          ]
+          ],
+      ],
     ];
   }
 }

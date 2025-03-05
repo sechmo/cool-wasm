@@ -8,6 +8,15 @@ class TestClass inherits IO {
   retInt(): Int {
     heyAnAttr
   };
+
+  testLoop(someProp: Int): Int {
+    let v: Int <- ~1, c: Int <- 0 in {
+      while c < someProp loop 
+        {c <- c + 1; v <- v * 2;}
+      pool;
+      v;
+    }
+  };
 };
 
 class A inherits IO {
@@ -66,6 +75,7 @@ class Main inherits IO{
     let x: Int <- 999 in let propI: Int <- x in propI;
     let c: C <- new C in let c: Int <- c.testLet(c,c,c, 80, type_name()) in {c<- 99; c; }; -- should print "Main" and return 99
     {propS <- "cat"; propS.length(); }; -- 3
+    (new TestClass).testLoop(5); -- ~32
     }
   };
 };
