@@ -37,6 +37,24 @@ export class ConstantGenerator {
     };
   }
 
+
+  public static intConstantSexpr(i: number): { name: string; sexpr: Sexpr } {
+    const name = `$Int.const.${this.intCount++}`;
+
+    return {
+      name: name,
+      sexpr: [
+        "global",
+        name,
+        ["export", `"${name}"`],
+        ["ref", "$Int"],
+        ["global.get", "$Int.vtable.canon"],
+        ["i32.const", `${i}`],
+        ["struct.new", "$Int"],
+      ],
+    };
+  }
+
   public static falseConstName = "$Bool.const.False";
   public static trueConstName = "$Bool.const.True";
 

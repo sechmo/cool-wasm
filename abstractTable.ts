@@ -31,4 +31,8 @@ export class AbstractTable {
     this.tbl.push(as);
     return as;
   }
+
+  foreach(...f: Parameters<typeof this.tbl.forEach>): ReturnType<typeof this.tbl.forEach> {
+    return this.tbl.forEach(...f);
+  }
 }

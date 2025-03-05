@@ -1,12 +1,12 @@
 import "./abstractTable.ts";
-import { AbstractSymbol } from "./abstractTable.ts";
+import { AbstractSymbol, AbstractTable } from "./abstractTable.ts";
 import { ClassTable } from "./classTable.ts";
 import { ErrorLogger } from "./errorLogger.ts";
 import { FeatureEnvironment } from "./featureEnvironment.ts";
 import { ScopedEnvironment } from "./scopedEnvironment.ts";
 import { SourceLocation, Utilities } from "./util.ts";
 import * as ASTConst from "./astConstants.ts";
-import { Sexpr, sexprToString } from "./cgen/cgenUtil.ts";
+import { ConstantGenerator, Sexpr, sexprToString } from "./cgen/cgenUtil.ts";
 
 /**
  * Callback type for AST traversal
@@ -180,16 +180,36 @@ export class Program extends ASTNode {
         ["func", "$outIntHelper", ["param", "i32"]],
       ],
     ];
-    const { typeDefBlock, programBlock } = this.featEnv!.cgenTypeDefs();
+    const { typeDefBlock, programBlock: initializationBlock } = this.featEnv!.cgenTypeDefs();
     const moreProgram = this.classes.flatMap((c) => c.cgen(this.featEnv!));
+
+    const constants: Sexpr[] = [];
+    // create and register all constants
+    const strToConstName = new Map<AbstractSymbol, string>();
+
+    AbstractTable.stringTable.foreach((sym) => {
+      const { name, sexpr } = ConstantGenerator.stringConstantSexpr(sym.toString());
+      strToConstName.set(sym, name);
+      constants.push(sexpr);
+    })
+
+    const intToConstName = new Map<AbstractSymbol, string>();
+
+    AbstractTable.intTable.foreach((sym) => {
+      const { name, sexpr } = ConstantGenerator.intConstantSexpr(Number.parseInt(sym.toString()));
+      intToConstName.set(sym, name);
+      constants.push(sexpr);
+    })
+
+
     const module: Sexpr = [
       "module",
       ...headers,
       typeDefBlock,
-      ...programBlock,
+      ...initializationBlock,
+      ...constants,
       ...moreProgram,
     ];
-
     return sexprToString(module);
   }
 }

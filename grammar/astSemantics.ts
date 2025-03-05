@@ -51,7 +51,7 @@ astSemantics.addOperation<AbstractSymbol>("getSymbol", {
     return AbstractTable.idTable.add(this.sourceString);
   },
   integerLiteral(_) {
-    return AbstractTable.idTable.add(this.sourceString);
+    return AbstractTable.intTable.add(this.sourceString);
   },
 
   stringLiteral(_LQ, inside, _RQ) {
