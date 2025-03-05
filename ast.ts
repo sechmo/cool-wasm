@@ -48,7 +48,7 @@ enum VarOrigin {
   LOCAL,
 };
 
-type VarOriginEnvironment = ScopedEnvironment<AbstractSymbol, VarOrigin>
+type VarOriginEnvironment = ScopedEnvironment<AbstractSymbol, {origin: VarOrigin, type: AbstractSymbol}>
 
 /**
  * Base abstract class for all expressions
@@ -313,7 +313,7 @@ export class ClassStatement extends ASTNode {
     const varOrEnv: VarOriginEnvironment = new ScopedEnvironment();
     varOrEnv.enterNewScope()
 
-    featEnv.classAllAttrs(this.name).forEach(({name}) => { varOrEnv.add(name, VarOrigin.CLASS)})
+    featEnv.classAllAttrs(this.name).forEach(({ name, signature }) => { varOrEnv.add(name, { origin: VarOrigin.CLASS, type: signature.type })})
 
     const attributeInits = this.features.filter((f) => f instanceof Attribute)
       .map((a) => {
@@ -455,10 +455,10 @@ export class Method extends Feature {
 
     varOrEnv.enterNewScope();
 
-    varOrEnv.add(ASTConst.self, VarOrigin.LOCAL);
+    varOrEnv.add(ASTConst.self, { origin: VarOrigin.LOCAL, type: currClsName });
 
     signature.arguments.forEach(arg => {
-      varOrEnv.add(arg.name, VarOrigin.LOCAL);
+      varOrEnv.add(arg.name, { origin: VarOrigin.LOCAL, type: arg.type });
     })
 
 
@@ -487,7 +487,7 @@ export class Method extends Feature {
       ["type", signature.cgen.signature],
       selfParam,
       ...signature.arguments.map(
-        (arg) => ["param", `$${arg.name}`, ["ref", `$${arg.type}`]],
+        (arg) => ["param", `$${arg.name}`, ["ref","null", `$${arg.type}`]],
       ),
       ["result", ["ref", "null", `$${signature.returnType}`]],
       ...selfAux,
@@ -592,7 +592,7 @@ export class Attribute extends Feature {
       return [["ref.null", nameCgen]];
     }
     varOrEnv.enterNewScope();
-    varOrEnv.add(ASTConst.self, VarOrigin.LOCAL)
+    varOrEnv.add(ASTConst.self, { origin: VarOrigin.LOCAL, type: currClsName })
     const cgInit = this.init.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeBlock);
     varOrEnv.exitLastScope();
 
@@ -1330,6 +1330,10 @@ export class TypeCase extends Expr {
  * Represents a let expression
  */
 export class Let extends Expr {
+  private static letExprCount = 0;
+  private static nextLetFuncName(): string {
+    return `$letFunc${this.letExprCount++}`
+  }
   constructor(
     location: SourceLocation,
     public identifier: AbstractSymbol,
@@ -1398,15 +1402,67 @@ export class Let extends Expr {
     this.setType(this.body.getType()!);
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    const cgenInit = this.init.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
-    const cgenBody = this.body.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
-    return [...cgenInit, ...cgenBody];
+
+    varOrEnv.enterNewScope()
+    varOrEnv.add(this.identifier, { origin: VarOrigin.LOCAL, type: this.typeDecl });
+    const cgenBody = this.body.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    const currScope = [...varOrEnv.currenScope().entries()];
+    varOrEnv.exitLastScope();
+
+
+    const letFuncName =Let.nextLetFuncName()
+
+    // const letFuncParams = [...currScope.entries()].flatMap(([name, { origin, type }]) => {
+    //     if (origin === VarOrigin.CLASS) return [];
+
+    //     if (origin === VarOrigin.LOCAL) {
+    //       return [
+    //         ["param", `$${name}`, ["ref", "null", `$${type}`]]
+    //       ]
+    //     }
+
+    //     throw `invalid origin ${origin}`
+    //   })
+
+    const letFuncParams: Sexpr[] = currScope
+      .filter(([_, { origin }]) => origin === VarOrigin.LOCAL)
+      .map(([name, {type}]) => ["param", `$${name}`, ["ref", "null", `$${type}`]])
+
+    const letFunc = [
+      "func", letFuncName,
+      ...letFuncParams,
+      // ["param", `$${this.identifier}`, ["ref", "null", `$${this.typeDecl}`]], // already in scoope
+      ["result", ["ref", "null", `$${this.getType()}`]],
+      ...cgenBody,
+    ];
+
+    beforeExprBlock.push(letFunc)
+
+    let cgInit;
+    if (this.init instanceof NoExpr) {
+      cgInit = [["ref.null", `$${this.typeDecl}`]];
+    }
+    else {
+      cgInit = this.init.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+    }
+    const letFuncArgs: Sexpr[] = currScope
+      .filter(([_, { origin }]) => origin === VarOrigin.LOCAL)
+      .flatMap(([name, _]) => name === this.identifier ?  cgInit: [ ["local.get", `$${name}`] ])
+
+
+
+    const letFuncCall = [
+      ...letFuncArgs,
+      ["call", letFuncName]
+    ];
+
+    return letFuncCall;
   }
 }
 
@@ -2301,7 +2357,8 @@ export class ObjectReference extends Expr {
     currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    const origin = varOrEnv.get(this.name)
+    const { origin } = varOrEnv.get(this.name)!
+
     if (origin === VarOrigin.CLASS) {
       return [
         ["local.get", "$self"],

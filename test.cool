@@ -29,6 +29,13 @@ class C inherits B {
   testMeth(): Object {
     out_string("testMeth.C")
   };
+  testLet(a: A, b: B, c: C, x: Int, s: String): Int {
+    let a: Int <- x, x: String <- s in 
+      {
+        out_string(x);
+        a;
+      }
+  };
 };
 
 class Main inherits IO{
@@ -56,6 +63,8 @@ class Main inherits IO{
     if new Bool then 0 else 1 fi; -- 1
     (new C)@A.testMeth(); -- this should print first "testMeth.A" and then "testMeth.C"
     (new TestClass).retInt();
+    let x: Int <- 999 in let propI: Int <- x in propI;
+    let c: C <- new C in c.testLet(c,c,c, 80, type_name()); -- should print "Main" and return 80
     }
   };
 };

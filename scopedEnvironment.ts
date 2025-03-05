@@ -46,4 +46,13 @@ export class ScopedEnvironment<K, V> {
 
     return undefined;
   }
+
+  public currenScope(): Map<K, V> {
+    return this.envs.reduce((acc, scope) => {
+      for (const [k, v] of scope.entries()) {
+        acc.set(k, v);
+      }
+      return acc;
+    }, new Map());
+  }
 }
