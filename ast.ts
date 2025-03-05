@@ -78,6 +78,13 @@ export abstract class Expr extends ASTNode {
     featEnv: FeatureEnvironment,
     currClsName: AbstractSymbol,
   ): void;
+
+  abstract cgen(
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[];
 }
 
 /**
@@ -100,6 +107,10 @@ export abstract class Feature extends ASTNode {
   ): void;
 }
 
+type ConstEnv = {
+  intConstants: Map<AbstractSymbol, string>;
+  strConstants: Map<AbstractSymbol, string>;
+};
 /**
  * Program is the root of the AST
  */
@@ -182,7 +193,6 @@ export class Program extends ASTNode {
     ];
     const { typeDefBlock, programBlock: initializationBlock } = this.featEnv!
       .cgenTypeDefs();
-    const moreProgram = this.classes.flatMap((c) => c.cgen(this.featEnv!));
 
     const constants: Sexpr[] = [];
     // create and register all constants
@@ -206,13 +216,22 @@ export class Program extends ASTNode {
       constants.push(sexpr);
     });
 
+    const constEnv: ConstEnv = {
+      strConstants: strToConstName,
+      intConstants: intToConstName,
+    };
+
+    const classesCode = this.classes.flatMap((c) =>
+      c.cgen(this.featEnv!, constEnv)
+    );
+
     const module: Sexpr = [
       "module",
       ...headers,
       typeDefBlock,
       ...initializationBlock,
       ...constants,
-      ...moreProgram,
+      ...classesCode,
     ];
     return sexprToString(module);
   }
@@ -273,20 +292,21 @@ export class ClassStatement extends ASTNode {
     }
   }
 
-  public cgen(featEnv: FeatureEnvironment): Sexpr[] {
+  public cgen(featEnv: FeatureEnvironment, constEnv: ConstEnv): Sexpr[] {
     const cgenClassName = `$${this.name}`;
+    const beforeClassBlock: Sexpr[] = [];
 
     const attributeInits = this.features.filter((f) => f instanceof Attribute)
       .map((a) => {
         const attrType = featEnv.classAttrType(this.name, a.name, this.name);
         const attrName = `$${a.name}`;
         // const localDeclare = ["local", localName, ["ref", "null", `$${a.typeDecl}`]]
-        const initExpr = a.cgen(featEnv, this.name);
+        const initExpr = a.cgen(featEnv, this.name, constEnv, beforeClassBlock);
 
         return { id: attrType.id, attrName, initExpr };
       }).toSorted(({ id: id0 }, { id: id1 }) => id0 - id1);
 
-    const initName = `${cgenClassName}.init`
+    const initName = `${cgenClassName}.init`;
 
     const initFunc = [
       "func",
@@ -300,7 +320,7 @@ export class ClassStatement extends ASTNode {
           "struct.set",
           `${cgenClassName}`,
           ai.attrName,
-        ]]
+        ]],
       ),
     ];
 
@@ -310,16 +330,18 @@ export class ClassStatement extends ASTNode {
       ["result", ["ref", cgenClassName]],
       ["local", "$self", ["ref", cgenClassName]],
       ["global.get", `${cgenClassName}.vtable.canon`],
-      ...featEnv.classAllAttrs(this.name).flatMap(({name: attrName,signature: at }) => [`;; ${attrName}` ,["ref.null", `$${at.type}`] ]), // initialize struct with nulls
+      ...featEnv.classAllAttrs(this.name).flatMap((
+        { name: attrName, signature: at },
+      ) => [`;; ${attrName}`, ["ref.null", `$${at.type}`]]), // initialize struct with nulls
       ["struct.new", cgenClassName],
-      ["local.tee", "$self"], 
-      ["call", initName], 
+      ["local.tee", "$self"],
+      ["call", initName],
       ["local.get", "$self"],
     ];
 
     const methodImplementations = this.features.filter((f) =>
       f instanceof Method
-    ).map((m) => m.cgen(featEnv, this.name));
+    ).flatMap((m) => m.cgen(featEnv, this.name, constEnv));
 
     return [
       initFunc,
@@ -395,13 +417,22 @@ export class Method extends Feature {
     }
   }
 
-  cgen(featEnv: FeatureEnvironment, currClsName: AbstractSymbol): Sexpr {
+  cgen(
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+    constEnv: ConstEnv,
+  ): Sexpr[] {
     const signature = featEnv.classMethodSignature(
       currClsName,
       this.name,
       currClsName,
     );
-    return [
+    const beforeBlock: Sexpr[] = [];
+
+    const bodyCgenExprs = this.body.cgen(featEnv, constEnv, beforeBlock, currClsName);
+
+
+    const method = [
       "func",
       signature.cgen.implementation,
       ["type", signature.cgen.signature],
@@ -410,8 +441,11 @@ export class Method extends Feature {
         (arg) => ["param", `$${arg.name}`, ["ref", `$${arg.type}`]],
       ),
       ["result", ["ref", `$${signature.returnType}`]],
-      ["unreachable"],
+      ...bodyCgenExprs,
     ];
+
+
+    return [...beforeBlock, method];
   }
 }
 
@@ -496,9 +530,18 @@ export class Attribute extends Feature {
     }
   }
 
-  cgen(featEnv: FeatureEnvironment, currClsName: AbstractSymbol): Sexpr[] {
+  cgen(
+    featEnv: FeatureEnvironment,
+    currClsName: AbstractSymbol,
+    constEnv: ConstEnv,
+    beforeBlock: Sexpr[],
+  ): Sexpr[] {
     const nameCgen = `$${this.typeDecl}`;
-    return [["ref.null", nameCgen]];
+    if (this.init instanceof NoExpr) {
+      return [["ref.null", nameCgen]];
+    }
+
+    return this.init.cgen(featEnv, constEnv, beforeBlock, currClsName);
   }
 }
 
@@ -561,6 +604,16 @@ export class NoExpr extends Expr {
   ): void {
     this.setType(ASTConst.No_type);
   }
+
+
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    _currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
+  }
 }
 
 /**
@@ -605,6 +658,23 @@ export class Block extends Expr {
     }
 
     this.setType(returnType);
+  }
+
+
+  override cgen(
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    const cgenExprs = []
+    for (const expr of this.expressions) {
+      cgenExprs.push(...expr.cgen(featEnv, constEnv, beforeExprBlock, currClsName));
+      cgenExprs.push(["drop"]) // ignore that value
+    }
+
+    cgenExprs.pop() // keep last value, remove last drop
+    return cgenExprs
   }
 }
 
@@ -673,6 +743,14 @@ export class Assignment extends Expr {
     }
 
     this.setType(this.expr.getType()!);
+  }
+  override cgen(
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
   }
 }
 
@@ -797,6 +875,14 @@ export class StaticDispatch extends Expr {
       }
     }
   }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
+  }
 }
 
 /**
@@ -903,6 +989,14 @@ export class DynamicDispatch extends Expr {
       }
     }
   }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
+  }
 }
 
 /**
@@ -962,6 +1056,14 @@ export class Conditional extends Expr {
       ),
     );
   }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
+  }
 }
 
 /**
@@ -1009,6 +1111,14 @@ export class Loop extends Expr {
 
     this.body.semant(clsTbl, objEnv, featEnv, currClsName);
     this.setType(ASTConst.Object_);
+  }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
   }
 }
 
@@ -1090,6 +1200,14 @@ export class TypeCase extends Expr {
 
     this.setType(returnType);
   }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
+  }
 }
 
 /**
@@ -1163,6 +1281,14 @@ export class Let extends Expr {
 
     this.setType(this.body.getType()!);
   }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
+  }
 }
 
 /**
@@ -1218,6 +1344,14 @@ export class Addition extends Expr {
     }
 
     this.setType(ASTConst.Int);
+  }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
   }
 }
 
@@ -1275,6 +1409,14 @@ export class Subtraction extends Expr {
 
     this.setType(ASTConst.Int);
   }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
+  }
 }
 
 /**
@@ -1330,6 +1472,14 @@ export class Multiplication extends Expr {
     }
 
     this.setType(ASTConst.Int);
+  }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
   }
 }
 
@@ -1387,6 +1537,14 @@ export class Division extends Expr {
 
     this.setType(ASTConst.Int);
   }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
+  }
 }
 
 /**
@@ -1430,6 +1588,14 @@ export class Negation extends Expr {
     }
 
     this.setType(ASTConst.Int);
+  }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
   }
 }
 
@@ -1487,6 +1653,14 @@ export class LessThan extends Expr {
 
     this.setType(ASTConst.Bool);
   }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
+  }
 }
 
 /**
@@ -1542,6 +1716,14 @@ export class Equal extends Expr {
     }
 
     this.setType(ASTConst.Bool);
+  }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
   }
 }
 
@@ -1599,6 +1781,14 @@ export class LessThanOrEqual extends Expr {
 
     this.setType(ASTConst.Bool);
   }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
+  }
 }
 
 /**
@@ -1643,6 +1833,14 @@ export class Complement extends Expr {
 
     this.setType(ASTConst.Bool);
   }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
+  }
 }
 
 /**
@@ -1673,6 +1871,15 @@ export class IntegerConstant extends Expr {
   ): void {
     this.setType(ASTConst.Int);
   }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    _currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    const constantName = constEnv.intConstants.get(this.token)!
+    return [["global.get", constantName]]
+  }
 }
 
 /**
@@ -1702,6 +1909,14 @@ export class BooleanConstant extends Expr {
     _currClsName: AbstractSymbol,
   ): void {
     this.setType(ASTConst.Bool);
+  }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
   }
 }
 
@@ -1734,6 +1949,15 @@ export class StringConstant extends Expr {
     _currClsName: AbstractSymbol,
   ): void {
     this.setType(ASTConst.Str);
+  }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    _currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    const constantName = constEnv.strConstants.get(this.token)!
+    return [["global.get", constantName]]
   }
 }
 
@@ -1777,6 +2001,14 @@ export class New extends Expr {
 
     this.setType(this.typeName);
   }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
+  }
 }
 
 /**
@@ -1812,6 +2044,14 @@ export class IsVoid extends Expr {
   ): void {
     this.expr.semant(clsTbl, objEnv, featEnv, currClsName);
     this.setType(ASTConst.Bool);
+  }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    throw "this should not happen";
   }
 }
 
@@ -1849,5 +2089,13 @@ export class ObjectReference extends Expr {
     }
 
     this.setType(typeFromEnv);
+  }
+  override cgen(
+    _featEnv: FeatureEnvironment,
+    _constEnv: ConstEnv,
+    _beforeExprBlock: Sexpr[],
+    currClsName: AbstractSymbol,
+  ): Sexpr[] {
+    return [["local.get", `$${this.name}`]];
   }
 }
