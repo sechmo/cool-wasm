@@ -2,7 +2,7 @@ import "./abstractTable.ts";
 import { AbstractSymbol, AbstractTable } from "./abstractTable.ts";
 import { ClassTable } from "./classTable.ts";
 import { ErrorLogger } from "./errorLogger.ts";
-import { FeatureEnvironment } from "./featureEnvironment.ts";
+import { FeatureEnvironment, MethodOrigin } from "./featureEnvironment.ts";
 import { ScopedEnvironment } from "./scopedEnvironment.ts";
 import { SourceLocation, Utilities } from "./util.ts";
 import * as ASTConst from "./astConstants.ts";
@@ -455,15 +455,33 @@ export class Method extends Feature {
 
     const bodyCgenExprs = this.body.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeBlock);
 
+    let selfParam =  ["param", "$self", ["ref", "null", `$${currClsName}`]] ;
+    let selfAux: Sexpr[] = [
+
+    ]
+
+
+    if (signature.origin === MethodOrigin.OVERRIDEN) {
+      selfParam = ["param", "$selfAux", ["ref", "null", `$${signature.firstDefiner}`]]
+      selfAux = [
+        ["local", "$self", ["ref", "null", `$${currClsName}`]],
+        ["local.get", "$selfAux"],
+        ["ref.cast", ["ref","null", `$${currClsName}`]],
+        ["local.set", "$self"]
+      ]
+      
+    }
+
     const method = [
       "func",
       signature.cgen.implementation,
       ["type", signature.cgen.signature],
-      ["param", "$self", ["ref", "null", `$${currClsName}`]],
+      selfParam,
       ...signature.arguments.map(
         (arg) => ["param", `$${arg.name}`, ["ref", `$${arg.type}`]],
       ),
       ["result", ["ref", "null", `$${signature.returnType}`]],
+      ...selfAux,
       ...bodyCgenExprs,
     ];
 
@@ -905,15 +923,30 @@ export class StaticDispatch extends Expr {
     }
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    const cgenArgs = this.args.flatMap((a) => a.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock));
-    const cgenCaller = this.callerExpr.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
-    return [...cgenCaller, ...cgenArgs, ["call", `$${this.typeName}.${this.name}`]]
+    const cgenArgs = this.args.flatMap((a) => a.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock));
+    const cgenCaller = this.callerExpr.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+
+    const signature = featEnv.classMethodSignature(this.typeName, this.name, currClsName);
+
+
+    let funName = signature.cgen.implementation;
+
+    // in order to be compatible with cool and
+    // due to how thery are implemented, some method should not use the direct implementation
+    // even with a static dispatch
+
+    if (this.name === ASTConst.copy || this.name === ASTConst.type_name) {
+      funName = signature.cgen.genericCaller;
+    }
+    console.error("signature", signature, "funName", funName);
+
+    return [...cgenCaller, ...cgenArgs, ["call", funName]]
   }
 }
 
@@ -1022,15 +1055,19 @@ export class DynamicDispatch extends Expr {
     }
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    const cgenArgs = this.args.flatMap((a) => a.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock));
-    const cgenCaller = this.callerExpr.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
-    return [...cgenCaller, ...cgenArgs, ["call", `$${this.callerExpr.getType()}.${this.name}`]]
+    const cgenArgs = this.args.flatMap((a) => a.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock));
+    const cgenCaller = this.callerExpr.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
+
+
+    const signature = featEnv.classMethodSignature(this.callerExpr.getType()!, this.name,currClsName);
+
+    return [...cgenCaller, ...cgenArgs, ["call", signature.cgen.genericCaller]]
   }
 }
 

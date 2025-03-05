@@ -1,8 +1,33 @@
 class TestClass inherits IO {
-  --someProp: IO <- out_string("testing"); 
+  someProp: IO <- out_string("testing"); 
   heyAnAttr: Int <- 32 + 21;
   aMethod(): TestClass {
     self
+  };
+
+  retInt(): Int {
+    heyAnAttr
+  };
+};
+
+class A inherits IO {
+  testMeth(): Object {
+    {
+      out_string("testMeth.A");
+      testMeth();
+    }
+  };
+};
+class B inherits A {
+  testMeth(): Object {
+    out_string("testMeth.B")
+  };
+};
+
+
+class C inherits B {
+  testMeth(): Object {
+    out_string("testMeth.C")
   };
 };
 
@@ -29,7 +54,8 @@ class Main inherits IO{
     new TestClass;
     new Int; -- 0
     if new Bool then 0 else 1 fi; -- 1
-
+    (new C)@A.testMeth(); -- this should print first "testMeth.A" and then "testMeth.C"
+    (new TestClass).retInt();
     }
   };
 };

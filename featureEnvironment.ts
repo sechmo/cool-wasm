@@ -6,7 +6,7 @@ import { ErrorLogger } from "./errorLogger.ts";
 import { ScopedEnvironment } from "./scopedEnvironment.ts";
 import { ConstantGenerator, Sexpr } from "./cgen/cgenUtil.ts";
 
-enum MethodOrigin {
+export enum MethodOrigin {
   NEW,
   INHERITED,
   OVERRIDEN,
@@ -15,6 +15,7 @@ export type MethodSignature = {
   arguments: Array<{ type: AbstractSymbol; name: AbstractSymbol }>;
   returnType: AbstractSymbol;
   origin: MethodOrigin;
+  firstDefiner: AbstractSymbol;
   id: number;
   cgen: {
     signature: string;
@@ -103,6 +104,7 @@ export class FeatureEnvironment {
         arguments: methSig.arguments,
         returnType: methSig.returnType,
         origin: MethodOrigin.INHERITED,
+        firstDefiner: methSig.firstDefiner,
         cgen: {
           signature: methSig.cgen.signature,
           implementation: methSig.cgen.implementation,
@@ -260,6 +262,7 @@ export class FeatureEnvironment {
         arguments: args,
         returnType: retType,
         origin: MethodOrigin.NEW,
+        firstDefiner: currCls,
         id: this.methodCounter(),
         cgen: {
           signature: `$${currCls}.${meth.name}.signature`,
@@ -282,6 +285,7 @@ export class FeatureEnvironment {
       returnType: retType,
       origin: MethodOrigin.OVERRIDEN,
       id: parentSig.id,
+      firstDefiner: parentSig.firstDefiner,
       cgen: {
         signature: parentSig.cgen.signature,
         implementation: `$${currCls}.${meth.name}.implementation`,
