@@ -6,7 +6,7 @@ import { basename } from "@std/path";
 import astSemantics from "./grammar/astSemantics.ts";
 import { ASTNode, Program } from "./ast.ts";
 import { convertWatToWasm } from "./wat2wast.ts";
-import { BODY_TYPES } from "https://deno.land/x/oak@v12.6.1/util.ts";
+import { ErrorLogger } from "./errorLogger.ts";
 
 // Configure Eta
 const eta = {
@@ -77,9 +77,32 @@ router.post("/parse", async (ctx) => {
     ctx.response.body = wasm;
     ctx.response.type = "application/wasm";
   } catch (e) {
-    console.log(e);
+    const error = (e as Error)
     ctx.response.status = 400;
-    ctx.response.body = e as Error;
+    ctx.response.body = error.message ? ErrorLogger.fullErrorMsg() : error;
+    ctx.response.type = "text/plain";
+  }
+});
+
+router.post("/wat", async (ctx) => {
+  const body = await ctx.request.body().value;
+  const { code } = JSON.parse(body);
+  if (!code) {
+    ctx.response.status = 400;
+    ctx.response.body = "No code provided";
+    return;
+  }
+  try {
+    const ast = parseFileToAST(code) as Program;
+    ast.semant();
+    const codeGen = ast.cgen();
+    ctx.response.body = codeGen;
+    ctx.response.type = "text/plain";
+  } catch (e) {
+    const error = (e as Error)
+    ctx.response.status = 400;
+    ctx.response.body = error.message ? ErrorLogger.fullErrorMsg() : error;
+    ctx.response.type = "text/plain";
   }
 });
 
