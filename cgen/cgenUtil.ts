@@ -1,5 +1,3 @@
-import { val } from "../astConstants.ts";
-
 export type Sexpr = (Sexpr | string)[];
 
 export const sexprToString = (s: Sexpr | string): string => {

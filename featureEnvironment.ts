@@ -1,4 +1,4 @@
-import { AbstractSymbol, AbstractTable } from "./abstractTable.ts";
+import { AbstractSymbol  } from "./abstractTable.ts";
 import { Attribute, ClassStatement, Method } from "./ast.ts";
 import { ClassTable } from "./classTable.ts";
 import * as ASTConst from "./astConstants.ts";

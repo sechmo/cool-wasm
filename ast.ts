@@ -8,6 +8,11 @@ import { SourceLocation, Utilities } from "./util.ts";
 import * as ASTConst from "./astConstants.ts";
 import { ConstantGenerator, Sexpr, sexprToString } from "./cgen/cgenUtil.ts";
 
+let labelCounter = 0;
+function generateLabel(): string {
+  return `$label${labelCounter++}`;
+}
+
 /**
  * Callback type for AST traversal
  */
@@ -906,7 +911,9 @@ export class StaticDispatch extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenArgs = this.args.flatMap((a) => a.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock));
+    const cgenCaller = this.callerExpr.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [...cgenCaller, ...cgenArgs, ["call", `$${this.typeName}.${this.name}`]]
   }
 }
 
@@ -1021,7 +1028,9 @@ export class DynamicDispatch extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenArgs = this.args.flatMap((a) => a.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock));
+    const cgenCaller = this.callerExpr.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [...cgenCaller, ...cgenArgs, ["call", `$${this.callerExpr.getType()}.${this.name}`]]
   }
 }
 
@@ -1165,7 +1174,17 @@ export class Loop extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const bodyBlock = this.body.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    const loopLabel = generateLabel();
+    const endLabel = generateLabel();
+    return [
+      ["loop", loopLabel],
+      ...this.predicate.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock),
+      ["if", ["local.get", "$t0"], ["then", loopLabel], ["else", endLabel]],
+      ...bodyBlock,
+      ["br", loopLabel],
+      ["label", endLabel],
+    ];
   }
 }
 
@@ -1336,7 +1355,9 @@ export class Let extends Expr {
     _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenInit = this.init.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    const cgenBody = this.body.cgen(_featEnv, _constEnv, _varOrEnv, _currClsName, _beforeExprBlock);
+    return [...cgenInit, ...cgenBody];
   }
 }
 
