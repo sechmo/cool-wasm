@@ -356,6 +356,7 @@ export class FeatureEnvironment {
     return this.methodSignatures.get(clsName)!.has(methName);
   }
 
+
   public classAttrType(
     clsName: AbstractSymbol,
     attrName: AbstractSymbol,
@@ -411,8 +412,8 @@ export class FeatureEnvironment {
       "func",
       "$Object.abort.implementation",
       ["type", "$Object.abort.signature"],
-      ["param", "$o", ["ref", "$Object"]],
-      ["result", ["ref", "$Object"]],
+      ["param", "$o", ["ref","null", "$Object"]],
+      ["result", ["ref","null", "$Object"]],
       ["i32.const", "-1"],
       ["throw", "$abortTag"],
     ]);
@@ -421,7 +422,7 @@ export class FeatureEnvironment {
       "func",
       "$Object.new",
       ["export", `"$Object.new"`],
-      ["result", ["ref", "$Object"]],
+      ["result", ["ref","null", "$Object"]],
       ["global.get", "$Object.vtable.canon"],
       ["struct.new", "$Object"],
     ]);
@@ -439,8 +440,8 @@ export class FeatureEnvironment {
       "$String.length.implementation",
       ["export", `"$String.length.implementation"`],
       ["type", "$String.length.signature"],
-      ["param", "$s", ["ref", "$String"]],
-      ["result", ["ref", "$Int"]],
+      ["param", "$s", ["ref", "null", "$String"]],
+      ["result", ["ref", "null", "$Int"]],
       ["global.get", "$Int.vtable.canon"],
       ["local.get", "$s"],
       ["struct.get", "$String", "$chars"],
@@ -453,10 +454,10 @@ export class FeatureEnvironment {
       "$String.substr.implementation",
       ["export", `"$String.substr.implementation"`],
       ["type", "$String.substr.signature"],
-      ["param", "$s", ["ref", "$String"]],
-      ["param", "$aInt", ["ref", "$Int"]],
-      ["param", "$bInt", ["ref", "$Int"]],
-      ["result", ["ref", "$String"]],
+      ["param", "$s", ["ref", "null", "$String"]],
+      ["param", "$aInt", ["ref", "null", "$Int"]],
+      ["param", "$bInt", ["ref", "null", "$Int"]],
+      ["result", ["ref", "null", "$String"]],
       ["local", "$diff", "i32"],
       ["local", "$res", ["ref", "$charsArr"]],
       ["local.get", "$bInt"],
@@ -499,10 +500,9 @@ export class FeatureEnvironment {
       "$String.concat.implementation",
       ["export", `"$String.concat.implementation"`],
       ["type", "$String.concat.signature"],
-      ["param", "$s0", ["ref", "$String"]],
-      ["param", "$s1", ["ref", "$String"]],
-      ["result", ["ref", "$String"]],
-      // [";; (unreachable)"], // Comment line - removed as it doesn't fit JS array format
+      ["param", "$s0", ["ref", "null", "$String"]],
+      ["param", "$s1", ["ref", "null", "$String"]],
+      ["result", ["ref", "null", "$String"]],
       ["local", "$newChars", ["ref", "$charsArr"]],
       ["local", "$lenS0", "i32"],
       ["local", "$lenS1", "i32"],
@@ -572,9 +572,9 @@ export class FeatureEnvironment {
       "$IO.out_string.implementation",
       ["export", `"$IO.out_string.implementation"`],
       ["type", "$IO.out_string.signature"],
-      ["param", "$io", ["ref", "$IO"]],
-      ["param", "$arg", ["ref", "$String"]],
-      ["result", ["ref", "$IO"]],
+      ["param", "$io", ["ref", "null", "$IO"]],
+      ["param", "$arg", ["ref", "null", "$String"]],
+      ["result", ["ref", "null", "$IO"]],
       ["local.get", "$arg"],
       ["ref.func", "$String.helper.length"],
       ["ref.func", "$String.helper.charAt"],
@@ -587,9 +587,9 @@ export class FeatureEnvironment {
       "$IO.out_int.implementation",
       ["export", `"$IO.out_int.implementation"`],
       ["type", "$IO.out_int.signature"],
-      ["param", "$io", ["ref", "$IO"]],
-      ["param", "$arg", ["ref", "$Int"]],
-      ["result", ["ref", "$IO"]],
+      ["param", "$io", ["ref", "null", "$IO"]],
+      ["param", "$arg", ["ref", "null", "$Int"]],
+      ["result", ["ref", "null", "$IO"]],
       ["local.get", "$arg"],
       ["call", "$Int.helper.toI32"],
       ["call", "$outIntHelper"],
@@ -600,8 +600,8 @@ export class FeatureEnvironment {
       "func",
       "$IO.in_string.implementation",
       ["type", "$IO.in_string.signature"],
-      ["param", ["ref", "$IO"]],
-      ["result", ["ref", "$String"]],
+      ["param", ["ref","null", "$IO"]],
+      ["result", ["ref","null", "$String"]],
       ["unreachable"],
     ]);
 
@@ -609,8 +609,8 @@ export class FeatureEnvironment {
       "func",
       "$IO.in_int.implementation",
       ["type", "$IO.in_int.signature"],
-      ["param", ["ref", "$IO"]],
-      ["result", ["ref", "$Int"]],
+      ["param", ["ref", "null", "$IO"]],
+      ["result", ["ref", "null","$Int"]],
       ["unreachable"],
     ]);
 
@@ -635,7 +635,7 @@ export class FeatureEnvironment {
       "func",
       "$Int.helper.toI32",
       ["export", `"$Int.helper.toI32"`],
-      ["param", "$i", ["ref", "$Int"]],
+      ["param", "$i", ["ref","null", "$Int"]],
       ["result", "i32"],
       ["local.get", "$i"],
       ["struct.get", "$Int", "$_val"],
@@ -708,18 +708,18 @@ export class FeatureEnvironment {
 
         const argumentsSignature = signature.arguments.map((
           { type, name },
-        ) => ["param", `$${name}`, ["ref", `$${type}`]]);
+        ) => ["param", `$${name}`, ["ref", "null", `$${type}`]]);
 
         const methSigWASM = [
           "type",
           signature.cgen.signature,
           [
             "func",
-            ["param", ["ref", classTypeNameCgen]],
+            ["param", ["ref", "null",classTypeNameCgen]],
             ...argumentsSignature,
             [
               "result",
-              ["ref", retType],
+              ["ref","null", retType],
             ],
           ],
         ];
@@ -733,9 +733,9 @@ export class FeatureEnvironment {
             "func",
             signature.cgen.genericCaller,
             ["export", `"${signature.cgen.genericCaller}"`], // to call from js
-            ["param", "$v", ["ref", classTypeNameCgen]],
+            ["param", "$v", ["ref", "null", classTypeNameCgen]],
             ...argumentsSignature,
-            ["result", ["ref", retType]],
+            ["result", ["ref", "null", retType]],
             ["local.get", "$v"],
             ...signature.arguments.map(({ name }) => ["local.get", `$${name}`]),
             ["local.get", "$v"],
@@ -866,11 +866,11 @@ export class FeatureEnvironment {
       "func",
       `${classTypeNameCgen}.copy.implementation`,
       ["type", "$Object.copy.signature"],
-      ["param", "$o", ["ref", "$Object"]],
-      ["result", ["ref", "$Object"]],
-      ["local", "$c", ["ref", classTypeNameCgen]],
+      ["param", "$o", ["ref", "null", "$Object"]],
+      ["result", ["ref", "null", "$Object"]],
+      ["local", "$c", ["ref", "null", classTypeNameCgen]],
       ["local.get", "$o"],
-      ["ref.cast", ["ref", classTypeNameCgen]],
+      ["ref.cast", ["ref","null", classTypeNameCgen]],
       ["local.set", "$c"],
       ["local.get", "$c"],
       ["struct.get", classTypeNameCgen, "$vt"],
@@ -896,8 +896,8 @@ export class FeatureEnvironment {
       "func",
       `${classTypeNameCgen}.type_name.implementation`,
       ["type", "$Object.type_name.signature"],
-      ["param", "$o", ["ref", "$Object"]],
-      ["result", ["ref", "$String"]],
+      ["param", "$o", ["ref", "null", "$Object"]],
+      ["result", ["ref", "null", "$String"]],
       ["global.get", strConstName],
     ];
 

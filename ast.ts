@@ -38,6 +38,13 @@ export abstract class ASTNode {
   abstract forEach(callback: ASTVisitorCallback): void;
 }
 
+enum VarOrigin {
+  CLASS,
+  LET,
+};
+
+type VarOriginEnvironment = ScopedEnvironment<AbstractSymbol, VarOrigin>
+
 /**
  * Base abstract class for all expressions
  */
@@ -82,8 +89,9 @@ export abstract class Expr extends ASTNode {
   abstract cgen(
     featEnv: FeatureEnvironment,
     constEnv: ConstEnv,
-    beforeExprBlock: Sexpr[],
+    varOrEnv: VarOriginEnvironment,
     currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[];
 }
 
@@ -179,7 +187,7 @@ export class Program extends ASTNode {
         "import",
         `"cool"`,
         `"outStringHelper"`,
-        ["func", "$outStringHelper", ["param", ["ref", "$String"]], ["param", [
+        ["func", "$outStringHelper", ["param", ["ref", "null", "$String"]], ["param", [
           "ref",
           "$String.helper.length.signature",
         ]], ["param", ["ref", "$String.helper.charAt.signature"]]],
@@ -296,12 +304,18 @@ export class ClassStatement extends ASTNode {
     const cgenClassName = `$${this.name}`;
     const beforeClassBlock: Sexpr[] = [];
 
+
+    const varOrEnv: VarOriginEnvironment = new ScopedEnvironment();
+    varOrEnv.enterNewScope()
+
+    featEnv.classAllAttrs(this.name).forEach(({name}) => { varOrEnv.add(name, VarOrigin.CLASS)})
+
     const attributeInits = this.features.filter((f) => f instanceof Attribute)
       .map((a) => {
         const attrType = featEnv.classAttrType(this.name, a.name, this.name);
         const attrName = `$${a.name}`;
         // const localDeclare = ["local", localName, ["ref", "null", `$${a.typeDecl}`]]
-        const initExpr = a.cgen(featEnv, this.name, constEnv, beforeClassBlock);
+        const initExpr = a.cgen(featEnv,  constEnv, varOrEnv, this.name, beforeClassBlock);
 
         return { id: attrType.id, attrName, initExpr };
       }).toSorted(({ id: id0 }, { id: id1 }) => id0 - id1);
@@ -327,6 +341,7 @@ export class ClassStatement extends ASTNode {
     const newFunc = [
       "func",
       `${cgenClassName}.new`,
+      ["export", `"${cgenClassName}.new"`],
       ["result", ["ref", cgenClassName]],
       ["local", "$self", ["ref", cgenClassName]],
       ["global.get", `${cgenClassName}.vtable.canon`],
@@ -339,9 +354,12 @@ export class ClassStatement extends ASTNode {
       ["local.get", "$self"],
     ];
 
+
     const methodImplementations = this.features.filter((f) =>
       f instanceof Method
-    ).flatMap((m) => m.cgen(featEnv, this.name, constEnv));
+    ).flatMap((m) => m.cgen(featEnv, constEnv, varOrEnv, this.name));
+
+    varOrEnv.exitLastScope();
 
     return [
       initFunc,
@@ -419,8 +437,9 @@ export class Method extends Feature {
 
   cgen(
     featEnv: FeatureEnvironment,
-    currClsName: AbstractSymbol,
     constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
   ): Sexpr[] {
     const signature = featEnv.classMethodSignature(
       currClsName,
@@ -429,21 +448,23 @@ export class Method extends Feature {
     );
     const beforeBlock: Sexpr[] = [];
 
-    const bodyCgenExprs = this.body.cgen(featEnv, constEnv, beforeBlock, currClsName);
+    const bodyCgenExprs = this.body.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeBlock);
+    console.error("in method", bodyCgenExprs)
 
 
     const method = [
       "func",
       signature.cgen.implementation,
       ["type", signature.cgen.signature],
-      ["param", "$self", ["ref", `$${currClsName}`]],
+      ["param", "$self", ["ref", "null", `$${currClsName}`]],
       ...signature.arguments.map(
         (arg) => ["param", `$${arg.name}`, ["ref", `$${arg.type}`]],
       ),
-      ["result", ["ref", `$${signature.returnType}`]],
+      ["result", ["ref", "null", `$${signature.returnType}`]],
       ...bodyCgenExprs,
     ];
 
+    console.error("final method", method);
 
     return [...beforeBlock, method];
   }
@@ -532,8 +553,9 @@ export class Attribute extends Feature {
 
   cgen(
     featEnv: FeatureEnvironment,
-    currClsName: AbstractSymbol,
     constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
     beforeBlock: Sexpr[],
   ): Sexpr[] {
     const nameCgen = `$${this.typeDecl}`;
@@ -541,7 +563,7 @@ export class Attribute extends Feature {
       return [["ref.null", nameCgen]];
     }
 
-    return this.init.cgen(featEnv, constEnv, beforeBlock, currClsName);
+    return this.init.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeBlock);
   }
 }
 
@@ -609,10 +631,11 @@ export class NoExpr extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
-    _beforeExprBlock: Sexpr[],
+    _varOrEnv: VarOriginEnvironment,
     _currClsName: AbstractSymbol,
+    _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    throw "Invalid cgen call: this should not happen";
   }
 }
 
@@ -664,12 +687,13 @@ export class Block extends Expr {
   override cgen(
     featEnv: FeatureEnvironment,
     constEnv: ConstEnv,
-    beforeExprBlock: Sexpr[],
+    varOrEnv: VarOriginEnvironment,
     currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
     const cgenExprs = []
     for (const expr of this.expressions) {
-      cgenExprs.push(...expr.cgen(featEnv, constEnv, beforeExprBlock, currClsName));
+      cgenExprs.push(...expr.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock));
       cgenExprs.push(["drop"]) // ignore that value
     }
 
@@ -747,10 +771,13 @@ export class Assignment extends Expr {
   override cgen(
     featEnv: FeatureEnvironment,
     constEnv: ConstEnv,
-    beforeExprBlock: Sexpr[],
+    varOrEnv: VarOriginEnvironment,
     currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    const cgenExpr = this.expr.cgen(featEnv, constEnv, varOrEnv,  currClsName, beforeExprBlock,);
+
+    return [...cgenExpr, ["local.get", "$"]]
   }
 }
 
@@ -878,8 +905,9 @@ export class StaticDispatch extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -992,8 +1020,9 @@ export class DynamicDispatch extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1059,8 +1088,9 @@ export class Conditional extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1115,8 +1145,9 @@ export class Loop extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1203,8 +1234,9 @@ export class TypeCase extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1284,8 +1316,9 @@ export class Let extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1348,8 +1381,9 @@ export class Addition extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1412,8 +1446,9 @@ export class Subtraction extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1476,8 +1511,9 @@ export class Multiplication extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1540,8 +1576,9 @@ export class Division extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1592,8 +1629,9 @@ export class Negation extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1656,8 +1694,9 @@ export class LessThan extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1720,8 +1759,9 @@ export class Equal extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1784,8 +1824,9 @@ export class LessThanOrEqual extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1836,8 +1877,9 @@ export class Complement extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1874,8 +1916,9 @@ export class IntegerConstant extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     constEnv: ConstEnv,
-    _beforeExprBlock: Sexpr[],
+    _varOrEnv: VarOriginEnvironment,
     _currClsName: AbstractSymbol,
+    _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
     const constantName = constEnv.intConstants.get(this.token)!
     return [["global.get", constantName]]
@@ -1913,8 +1956,9 @@ export class BooleanConstant extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -1953,8 +1997,9 @@ export class StringConstant extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     constEnv: ConstEnv,
-    _beforeExprBlock: Sexpr[],
+    _varOrEnv: VarOriginEnvironment,
     _currClsName: AbstractSymbol,
+    _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
     const constantName = constEnv.strConstants.get(this.token)!
     return [["global.get", constantName]]
@@ -2004,8 +2049,9 @@ export class New extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -2048,8 +2094,9 @@ export class IsVoid extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
+    _varOrEnv: VarOriginEnvironment,
+    _currClsName: AbstractSymbol,
     _beforeExprBlock: Sexpr[],
-    currClsName: AbstractSymbol,
   ): Sexpr[] {
     throw "this should not happen";
   }
@@ -2093,9 +2140,17 @@ export class ObjectReference extends Expr {
   override cgen(
     _featEnv: FeatureEnvironment,
     _constEnv: ConstEnv,
-    _beforeExprBlock: Sexpr[],
+    varOrEnv: VarOriginEnvironment,
     currClsName: AbstractSymbol,
+    _beforeExprBlock: Sexpr[],
   ): Sexpr[] {
+    const origin = varOrEnv.get(this.name)
+    if (origin === VarOrigin.CLASS) {
+      return [
+        ["local.get", "$self"],
+        ["struct.get", `$${currClsName}`, `$${this.name}`]
+      ];
+    }
     return [["local.get", `$${this.name}`]];
   }
 }
