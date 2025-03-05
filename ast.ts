@@ -1444,18 +1444,6 @@ export class Let extends Expr {
 
     const letFuncName =Let.nextLetFuncName()
 
-    // const letFuncParams = [...currScope.entries()].flatMap(([name, { origin, type }]) => {
-    //     if (origin === VarOrigin.CLASS) return [];
-
-    //     if (origin === VarOrigin.LOCAL) {
-    //       return [
-    //         ["param", `$${name}`, ["ref", "null", `$${type}`]]
-    //       ]
-    //     }
-
-    //     throw `invalid origin ${origin}`
-    //   })
-
     const letFuncParams: Sexpr[] = currScope
       .filter(([_, { origin }]) => origin === VarOrigin.LOCAL)
       .map(([name, {type}]) => ["param", `$${name}`, ["ref", "null", `$${type}`]])
@@ -2331,13 +2319,17 @@ export class IsVoid extends Expr {
     this.setType(ASTConst.Bool);
   }
   override cgen(
-    _featEnv: FeatureEnvironment,
-    _constEnv: ConstEnv,
-    _varOrEnv: VarOriginEnvironment,
-    _currClsName: AbstractSymbol,
-    _beforeExprBlock: Sexpr[],
+    featEnv: FeatureEnvironment,
+    constEnv: ConstEnv,
+    varOrEnv: VarOriginEnvironment,
+    currClsName: AbstractSymbol,
+    beforeExprBlock: Sexpr[],
   ): Sexpr[] {
-    throw "this should not happen";
+    return [
+      ...this.expr.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock),
+      ["ref.is_null"],
+      ["call", "$Bool.helper.fromI32"],
+    ];
   }
 }
 
