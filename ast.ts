@@ -481,6 +481,9 @@ export class Method extends Feature {
       
     }
 
+
+    const cgenTypeRet = signature.returnType === ASTConst.SELF_TYPE ? currClsName : signature.returnType;
+
     const method = [
       "func",
       signature.cgen.implementation,
@@ -489,7 +492,7 @@ export class Method extends Feature {
       ...signature.arguments.map(
         (arg) => ["param", `$${arg.name}`, ["ref","null", `$${arg.type}`]],
       ),
-      ["result", ["ref", "null", `$${signature.returnType}`]],
+      ["result", ["ref", "null", `$${cgenTypeRet}`]],
       ...selfAux,
       ...bodyCgenExprs,
     ];
@@ -1606,15 +1609,20 @@ export class Let extends Expr {
       .filter(([_, { origin }]) => origin === VarOrigin.LOCAL)
       .map(([name, {type}]) => ["param", `$${name}`, ["ref", "null", `$${type}`]])
 
+
+    const cgenTypeRet = this.getType() === ASTConst.SELF_TYPE ? currClsName : this.getType();
+
     const letFunc = [
       "func", letFuncName,
       ...letFuncParams,
       // ["param", `$${this.identifier}`, ["ref", "null", `$${this.typeDecl}`]], // already in scoope
-      ["result", ["ref", "null", `$${this.getType()}`]],
+      ["result", ["ref", "null", `$${cgenTypeRet}`]],
       ...cgenBody,
     ];
 
     beforeExprBlock.push(letFunc)
+
+    const cgenTypeDecl = this.typeDecl === ASTConst.SELF_TYPE ? currClsName : this.typeDecl;
 
     let cgInit;
     if (this.init instanceof NoExpr) {
@@ -1625,7 +1633,7 @@ export class Let extends Expr {
       } else if (this.typeDecl === ASTConst.Bool) {
         cgInit = [["call", "$Bool.new"]]
       } else {
-        cgInit = [["ref.null", `$${this.typeDecl}`]];
+        cgInit = [["ref.null", `$${cgenTypeDecl}`]];
       }
     } else {
       cgInit = this.init.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeExprBlock);
