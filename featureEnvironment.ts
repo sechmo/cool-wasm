@@ -356,6 +356,18 @@ export class FeatureEnvironment {
     return this.methodSignatures.get(clsName)!.has(methName);
   }
 
+  public classAttrType(
+    clsName: AbstractSymbol,
+    attrName: AbstractSymbol,
+    currClsName: AbstractSymbol,
+  ): AttributeType {
+    if (clsName === ASTConst.SELF_TYPE) {
+      return this.classAttrType(currClsName, attrName, currClsName);
+    }
+
+    return this.attributeTypes.get(clsName)!.get(attrName)!;
+  }
+
   public classGetMethodSignature(
     clsName: AbstractSymbol,
     methName: AbstractSymbol,
@@ -404,6 +416,12 @@ export class FeatureEnvironment {
       ["result", ["ref", "$Object"]],
       ["global.get", "$Object.vtable.canon"],
       ["struct.new", "$Object"],
+    ]);
+
+    // init needed for the init of classes that inherit Object
+    programBlock.push([
+      "func",
+      "$IO.object", // nothing to initialize actually
     ]);
 
     programBlock.push([
@@ -586,7 +604,6 @@ export class FeatureEnvironment {
       ["unreachable"],
     ]);
 
-
     programBlock.push([
       "func",
       "$IO.new",
@@ -594,6 +611,12 @@ export class FeatureEnvironment {
       ["result", ["ref", "$IO"]],
       ["global.get", "$IO.vtable.canon"],
       ["struct.new", "$IO"],
+    ]);
+
+    // init needed for the init of classes that inherit IO
+    programBlock.push([
+      "func",
+      "$IO.init", // nothing to initialize actually
     ]);
 
     programBlock.push([
@@ -610,13 +633,12 @@ export class FeatureEnvironment {
       "func",
       "$Int.helper.fromI32",
       ["export", `"$Int.helper.fromI32"`],
-      ["param", "$i",  "i32"],
-      ["result",["ref", "$Int"]],
+      ["param", "$i", "i32"],
+      ["result", ["ref", "$Int"]],
       ["global.get", "$Int.vtable.canon"],
       ["local.get", "$i"],
       ["struct.new", "$Int"],
     ]);
-
 
     programBlock.push([
       "func",
@@ -632,14 +654,14 @@ export class FeatureEnvironment {
       "func",
       "$Bool.helper.fromI32",
       ["export", `"$Bool.helper.fromI32"`],
-      ["param", "$i",  "i32"],
-      ["result",["ref", "$Bool"]],
+      ["param", "$i", "i32"],
+      ["result", ["ref", "$Bool"]],
       ["global.get", "$Bool.vtable.canon"],
       ["local.get", "$i"],
       ["struct.new", "$Bool"],
     ]);
 
-    programBlock.push(...ConstantGenerator.booleanConstantsSexpr())
+    programBlock.push(...ConstantGenerator.booleanConstantsSexpr());
 
     return { typeDefBlock: typeDefBlock, programBlock: programBlock };
   }
@@ -783,18 +805,31 @@ export class FeatureEnvironment {
       typeDefBlock.push(["type", "$charsArr", ["array", ["mut", "i8"]]]); // for concat and substr we need mutable arrays
       // structAttributesSorted.push(["field", "$chars", ["ref", "$charsArr"]]);
       sortedAttributes.push([ASTConst.chars, {
-        type: AbstractTable.idTable.add("charsArr"),
+        type: ASTConst.charsArr,
         id: -1,
       }]);
     }
 
     const structAttributesSorted: Sexpr = sortedAttributes.map((
       [n, { type }],
-    ) => [
-      "field",
-      `$${n}`,
-      type === ASTConst.i32 ? `${ASTConst.i32}` : ["ref", `$${type}`],
-    ]);
+    ) => {
+      let fieldType: Sexpr | string = ["ref", "null", `$${type}`];
+      if (type === ASTConst.i32 || type === ASTConst.charsArr) {
+        if (type === ASTConst.i32) {
+          fieldType = `${ASTConst.i32}`;
+        } else {
+          fieldType = ["ref", `$${ASTConst.charsArr}`];
+        }
+      } else {
+        fieldType = ["mut", fieldType];
+      }
+
+      return [
+        "field",
+        `$${n}`,
+        fieldType,
+      ];
+    });
 
     // add class, without attributes for now
     let clsStruct: Sexpr = [];

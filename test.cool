@@ -1,5 +1,8 @@
 class Main {
+  propI: Int <- 3;
+  propS: String <- "Test";
+  propNoInit: String;
   main(): Int {
-    42
+    {"constant string";42;}
   };
 };

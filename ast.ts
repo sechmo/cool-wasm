@@ -270,12 +270,38 @@ export class ClassStatement extends ASTNode {
   }
 
   public cgen(featEnv: FeatureEnvironment): Sexpr[] {
-    // first create methodds
+    const cgenClassName = `$${this.name}`
+
+
+
+    const attributeInits = this.features.filter((f) =>
+      f instanceof Attribute
+    ).map((a) => {
+      const attrType = featEnv.classAttrType(this.name, a.name, this.name);
+      const attrName = `$${a.name}`
+      // const localDeclare = ["local", localName, ["ref", "null", `$${a.typeDecl}`]]
+      const initExpr = a.cgen(featEnv, this.name)
+
+      return {id: attrType.id, attrName, initExpr}
+    }).toSorted(({id: id0}, {id: id1}) => id0 - id1);
+
+
+    const initFunc = [
+      "func",
+      `${cgenClassName}.init`,
+      ["param", "$self", ["ref", `$${this.name}`]],
+      // ...attributeInits.map(ai => ai.localDeclare),
+      ...attributeInits.flatMap(ai => [["local.get", "$self"] ,...ai.initExpr, ["struct.set", `${cgenClassName}`,ai.attrName]])
+    ]
+
     const methodImplementations = this.features.filter((f) =>
       f instanceof Method
     ).map((m) => m.cgen(featEnv, this.name));
 
-    return methodImplementations;
+    return [
+      initFunc,
+      ...methodImplementations
+    ];
   }
 }
 
@@ -444,6 +470,12 @@ export class Attribute extends Feature {
           `is not a subtype of ${this.typeDecl}`,
       );
     }
+  }
+
+
+  cgen(featEnv: FeatureEnvironment, currClsName: AbstractSymbol): Sexpr[] {
+    const nameCgen = `$${this.typeDecl}`
+    return [["ref.null", nameCgen]];
   }
 }
 
