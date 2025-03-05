@@ -57,7 +57,7 @@
 			<div class="flex-1 flex flex-col border-r border-editor-border">
 				<!-- Tab Bar -->
 				<div class="bg-editor-bg border-b border-editor-border flex items-center">
-					<div
+					<div onclick="switchTab('editor')" id="tab-editor"
 						class="px-4 py-2 bg-editor-highlight text-editor-text border-r border-editor-border flex items-center">
 						<span>
 							<%= it.fileName || "main.cl" %>
@@ -70,10 +70,23 @@
 							</svg>
 						</button>
 					</div>
+					<div id="tab-wat" onclick="switchTab('wat')"
+						class="px-4 py-2 bg-editor-highlight text-editor-text border-r border-editor-border flex items-center">
+						<span>
+							WAT Output
+						</span>
+						<button class="ml-2 text-editor-line hover:text-editor-text">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+								stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+									d="M6 18L18 6M6 6l12 12" />
+							</svg>
+						</button>
+					</div>
 				</div>
 
 				<!-- Line Numbers and Editor -->
-				<div class="flex-1 flex overflow-hidden">
+				<div id="editor-container" class="flex-1 flex overflow-hidden">
 					<!-- Line Numbers -->
 					<div id="line-numbers"
 						class="bg-editor-bg text-editor-line text-right p-2 select-none w-12 overflow-y-hidden font-mono text-sm">
@@ -84,6 +97,11 @@
 					<textarea id="editor" onkeyup="updateLineNumbers()"
 						class="flex-1 bg-editor-bg text-editor-text p-2 outline-none resize-none font-mono text-sm"
 						spellcheck="false"><%= it.defaultCode  %></textarea>
+				</div>
+
+				<!-- WAT Output -->
+				<div id="wat-container" class="flex-1 flex overflow-y-auto hidden">
+					<pre id="wat-output" class="flex-1 bg-editor-bg h-full text-editor-text p-2 font-mono text-sm"></pre>
 				</div>
 
 				<!-- Run Button -->
@@ -141,6 +159,9 @@
 		const statusElement = document.getElementById('status');
 		const cursorPostion = document.getElementById('cursor-position');
 		const lineNumbers = document.getElementById('line-numbers');
+		const editorContainer = document.getElementById('editor-container');
+		const watContainer = document.getElementById('wat-container');
+		const watOutput = document.getElementById('wat-output');
 
 		async function parseWasm(code) {
 			const response = await fetch('/parse', {
@@ -152,12 +173,31 @@
 			})
 			if (!response.ok) {
 				const error = await response.text();
+				console.log(error);
 				output.textContent = error;
 				return null;
 			}
 			const buffer = await response.arrayBuffer();
 			const module = await WebAssembly.compile(buffer);
 			return module;
+		}
+
+		async function getWat(code) {
+			const response = await fetch('/wat', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'text/plain',
+				},
+				body: JSON.stringify({ code: code }),
+			})
+			if (!response.ok) {
+				const error = await response.text();
+				console.log(error);
+				output.textContent = error;
+				return null;
+			}
+			const wat = await response.text();
+			return wat;
 		}
 
 		async function runWasm(code) {
@@ -176,12 +216,12 @@
 						for (let i = 0; i < len; i++) {
 							jsStr += String.fromCharCode(charAtFun(strRef, i));
 						}
-						console.log(jsStr);
-						output.textContent += jsStr + "\n";
+						console.log('>>>', jsStr);
+						output.textContent += jsStr;
 					},
 					outIntHelper: (valAsNumber) => {
 						console.log(valAsNumber)
-						output.textContent += valAsNumber + "\n";
+						output.textContent += valAsNumber;
 					}
 				},
 				console,
@@ -199,21 +239,17 @@
 				return str;
 			};
 
-			const s0 = wasmInstance.exports["$String.new"]();
+			const Main = wasmInstance.exports["$Main.new"]();
+			const mainFunc = wasmInstance.exports["$Main.main.generic"];
+			try	{
+				mainFunc(Main);
+			} catch (e) {
+				console.error(e);
+				output.textContent = e;
+			}
 
-			const obj = wasmInstance.exports["$Object.new"]();
-
-			strToJs(wasmInstance.exports["$Object.type_name.generic"](obj))
-
-			const io = wasmInstance.exports["$IO.new"]();
-			const ioTypeName = wasmInstance.exports["$Object.type_name.generic"](io);
-			strToJs(ioTypeName);
-			wasmInstance.exports["$IO.out_string.generic"](io, ioTypeName);
-
-			const int = wasmInstance.exports["$Int.helper.fromI32"](1234);
-			const intTypeName = wasmInstance.exports["$Object.type_name.generic"](int)
-			strToJs(intTypeName);
-			wasmInstance.exports["$IO.out_int.generic"](io, int);
+			// Display WAT code in the new tab
+			watOutput.textContent = await getWat(code);
 		}
 
 		async function compileAndRun() {
@@ -243,7 +279,11 @@
 			// For this demo, we'll just simulate the output based on the code
 			// In a real compiler, this would be the actual program output
 
-			await runWasm(code);
+			try {
+				await runWasm(code);
+			} catch (e) {
+				output.textContent = e;
+			}
 
 			// Update status
 			statusElement.textContent = "Ready";
@@ -260,6 +300,8 @@
 		// Clear button click handler
 		clearButton.addEventListener('click', function () {
 			output.textContent = "";
+			watContainer.classList.add('hidden');
+			watOutput.textContent = "";
 		});
 
 		function updateLineNumbers() {
@@ -279,6 +321,20 @@
 		}
 
 		document.addEventListener('DOMContentLoaded', updateLineNumbers);
+
+		function switchTab(tab) {
+			if (tab === 'editor') {
+				editorContainer.classList.remove('hidden');
+				watContainer.classList.add('hidden');
+				document.getElementById('tab-editor').classList.add('active');
+				document.getElementById('tab-wat').classList.remove('active');
+			} else if (tab === 'wat') {
+				editorContainer.classList.add('hidden');
+				watContainer.classList.remove('hidden');
+				document.getElementById('tab-editor').classList.remove('active');
+				document.getElementById('tab-wat').classList.add('active');
+			}
+		}
 	</script>
 </body>
 
