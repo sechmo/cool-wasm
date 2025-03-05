@@ -1,3 +1,11 @@
+class TestClass inherits IO {
+  someProp: TestClass; 
+  heyAnAttr: Int <- 32 + 21;
+  aMethod(): TestClass {
+    self
+  };
+};
+
 class Main {
   propI: Int <- 3;
   propS: String <- "Test";

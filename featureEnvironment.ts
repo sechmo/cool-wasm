@@ -368,13 +368,21 @@ export class FeatureEnvironment {
     return this.attributeTypes.get(clsName)!.get(attrName)!;
   }
 
-  public classGetMethodSignature(
+  public classAllAttrs(
+    clsName: AbstractSymbol,
+  ): { name: AbstractSymbol; signature: AttributeType }[] {
+    return [...this.attributeTypes.get(clsName)!.entries()]
+      .toSorted(([_0, { id: id0 }], [_1, { id: id1 }]) => id0 - id1)
+      .map(([name, signature]) => ({ name, signature }));
+  }
+
+  public classMethodSignature(
     clsName: AbstractSymbol,
     methName: AbstractSymbol,
     currClsName: AbstractSymbol,
   ): MethodSignature {
     if (clsName === ASTConst.SELF_TYPE) {
-      return this.classGetMethodSignature(currClsName, methName, currClsName);
+      return this.classMethodSignature(currClsName, methName, currClsName);
     }
 
     return this.methodSignatures.get(clsName)!.get(methName)!;
@@ -421,7 +429,9 @@ export class FeatureEnvironment {
     // init needed for the init of classes that inherit Object
     programBlock.push([
       "func",
-      "$IO.object", // nothing to initialize actually
+      "$Object.init",
+      ["param", "$o", ["ref", "$Object"]],
+      // nothing to initialize actually
     ]);
 
     programBlock.push([
@@ -617,6 +627,8 @@ export class FeatureEnvironment {
     programBlock.push([
       "func",
       "$IO.init", // nothing to initialize actually
+      ["param", "$io", ["ref", "$IO"]],
+      // nothing to initialize actually
     ]);
 
     programBlock.push([

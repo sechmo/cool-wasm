@@ -180,7 +180,8 @@ export class Program extends ASTNode {
         ["func", "$outIntHelper", ["param", "i32"]],
       ],
     ];
-    const { typeDefBlock, programBlock: initializationBlock } = this.featEnv!.cgenTypeDefs();
+    const { typeDefBlock, programBlock: initializationBlock } = this.featEnv!
+      .cgenTypeDefs();
     const moreProgram = this.classes.flatMap((c) => c.cgen(this.featEnv!));
 
     const constants: Sexpr[] = [];
@@ -188,19 +189,22 @@ export class Program extends ASTNode {
     const strToConstName = new Map<AbstractSymbol, string>();
 
     AbstractTable.stringTable.foreach((sym) => {
-      const { name, sexpr } = ConstantGenerator.stringConstantSexpr(sym.toString());
+      const { name, sexpr } = ConstantGenerator.stringConstantSexpr(
+        sym.toString(),
+      );
       strToConstName.set(sym, name);
       constants.push(sexpr);
-    })
+    });
 
     const intToConstName = new Map<AbstractSymbol, string>();
 
     AbstractTable.intTable.foreach((sym) => {
-      const { name, sexpr } = ConstantGenerator.intConstantSexpr(Number.parseInt(sym.toString()));
+      const { name, sexpr } = ConstantGenerator.intConstantSexpr(
+        Number.parseInt(sym.toString()),
+      );
       intToConstName.set(sym, name);
       constants.push(sexpr);
-    })
-
+    });
 
     const module: Sexpr = [
       "module",
@@ -270,29 +274,48 @@ export class ClassStatement extends ASTNode {
   }
 
   public cgen(featEnv: FeatureEnvironment): Sexpr[] {
-    const cgenClassName = `$${this.name}`
+    const cgenClassName = `$${this.name}`;
 
+    const attributeInits = this.features.filter((f) => f instanceof Attribute)
+      .map((a) => {
+        const attrType = featEnv.classAttrType(this.name, a.name, this.name);
+        const attrName = `$${a.name}`;
+        // const localDeclare = ["local", localName, ["ref", "null", `$${a.typeDecl}`]]
+        const initExpr = a.cgen(featEnv, this.name);
 
+        return { id: attrType.id, attrName, initExpr };
+      }).toSorted(({ id: id0 }, { id: id1 }) => id0 - id1);
 
-    const attributeInits = this.features.filter((f) =>
-      f instanceof Attribute
-    ).map((a) => {
-      const attrType = featEnv.classAttrType(this.name, a.name, this.name);
-      const attrName = `$${a.name}`
-      // const localDeclare = ["local", localName, ["ref", "null", `$${a.typeDecl}`]]
-      const initExpr = a.cgen(featEnv, this.name)
-
-      return {id: attrType.id, attrName, initExpr}
-    }).toSorted(({id: id0}, {id: id1}) => id0 - id1);
-
+    const initName = `${cgenClassName}.init`
 
     const initFunc = [
       "func",
-      `${cgenClassName}.init`,
-      ["param", "$self", ["ref", `$${this.name}`]],
+      initName,
+      ["param", "$self", ["ref", cgenClassName]],
+      ["local.get", "$self"],
+      ["call", `$${this.parentName}.init`],
       // ...attributeInits.map(ai => ai.localDeclare),
-      ...attributeInits.flatMap(ai => [["local.get", "$self"] ,...ai.initExpr, ["struct.set", `${cgenClassName}`,ai.attrName]])
-    ]
+      ...attributeInits.flatMap(
+        (ai) => [["local.get", "$self"], ...ai.initExpr, [
+          "struct.set",
+          `${cgenClassName}`,
+          ai.attrName,
+        ]]
+      ),
+    ];
+
+    const newFunc = [
+      "func",
+      `${cgenClassName}.new`,
+      ["result", ["ref", cgenClassName]],
+      ["local", "$self", ["ref", cgenClassName]],
+      ["global.get", `${cgenClassName}.vtable.canon`],
+      ...featEnv.classAllAttrs(this.name).flatMap(({name: attrName,signature: at }) => [`;; ${attrName}` ,["ref.null", `$${at.type}`] ]), // initialize struct with nulls
+      ["struct.new", cgenClassName],
+      ["local.tee", "$self"], 
+      ["call", initName], 
+      ["local.get", "$self"],
+    ];
 
     const methodImplementations = this.features.filter((f) =>
       f instanceof Method
@@ -300,7 +323,8 @@ export class ClassStatement extends ASTNode {
 
     return [
       initFunc,
-      ...methodImplementations
+      newFunc,
+      ...methodImplementations,
     ];
   }
 }
@@ -372,7 +396,7 @@ export class Method extends Feature {
   }
 
   cgen(featEnv: FeatureEnvironment, currClsName: AbstractSymbol): Sexpr {
-    const signature = featEnv.classGetMethodSignature(
+    const signature = featEnv.classMethodSignature(
       currClsName,
       this.name,
       currClsName,
@@ -472,9 +496,8 @@ export class Attribute extends Feature {
     }
   }
 
-
   cgen(featEnv: FeatureEnvironment, currClsName: AbstractSymbol): Sexpr[] {
-    const nameCgen = `$${this.typeDecl}`
+    const nameCgen = `$${this.typeDecl}`;
     return [["ref.null", nameCgen]];
   }
 }
@@ -731,7 +754,7 @@ export class StaticDispatch extends Expr {
       return;
     }
 
-    const signature = featEnv.classGetMethodSignature(
+    const signature = featEnv.classMethodSignature(
       this.typeName,
       this.name,
       currClsName,
@@ -837,7 +860,7 @@ export class DynamicDispatch extends Expr {
       return;
     }
 
-    const signature = featEnv.classGetMethodSignature(
+    const signature = featEnv.classMethodSignature(
       this.callerExpr.getType()!,
       this.name,
       currClsName,
