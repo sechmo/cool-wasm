@@ -45,7 +45,7 @@ export abstract class ASTNode {
 
 enum VarOrigin {
   CLASS,
-  LET,
+  LOCAL,
 };
 
 type VarOriginEnvironment = ScopedEnvironment<AbstractSymbol, VarOrigin>
@@ -453,12 +453,21 @@ export class Method extends Feature {
     );
     const beforeBlock: Sexpr[] = [];
 
+    varOrEnv.enterNewScope();
+
+    varOrEnv.add(ASTConst.self, VarOrigin.LOCAL);
+
+    signature.arguments.forEach(arg => {
+      varOrEnv.add(arg.name, VarOrigin.LOCAL);
+    })
+
+
     const bodyCgenExprs = this.body.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeBlock);
 
-    let selfParam =  ["param", "$self", ["ref", "null", `$${currClsName}`]] ;
-    let selfAux: Sexpr[] = [
+    varOrEnv.exitLastScope();
 
-    ]
+    let selfParam =  ["param", "$self", ["ref", "null", `$${currClsName}`]] ;
+    let selfAux: Sexpr[] = [ ]
 
 
     if (signature.origin === MethodOrigin.OVERRIDEN) {
@@ -582,8 +591,12 @@ export class Attribute extends Feature {
     if (this.init instanceof NoExpr) {
       return [["ref.null", nameCgen]];
     }
+    varOrEnv.enterNewScope();
+    varOrEnv.add(ASTConst.self, VarOrigin.LOCAL)
+    const cgInit = this.init.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeBlock);
+    varOrEnv.exitLastScope();
 
-    return this.init.cgen(featEnv, constEnv, varOrEnv, currClsName, beforeBlock);
+    return cgInit;
   }
 }
 
@@ -944,7 +957,6 @@ export class StaticDispatch extends Expr {
     if (this.name === ASTConst.copy || this.name === ASTConst.type_name) {
       funName = signature.cgen.genericCaller;
     }
-    console.error("signature", signature, "funName", funName);
 
     return [...cgenCaller, ...cgenArgs, ["call", funName]]
   }
@@ -2295,7 +2307,9 @@ export class ObjectReference extends Expr {
         ["local.get", "$self"],
         ["struct.get", `$${currClsName}`, `$${this.name}`]
       ];
+    } else if (origin === VarOrigin.LOCAL) {
+      return [["local.get", `$${this.name}`]];
     }
-    return [["local.get", `$${this.name}`]];
+    throw `invalid object not in scope ${this.name}: SCOPE ${varOrEnv}`;
   }
 }

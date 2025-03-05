@@ -9,6 +9,16 @@ export class ScopedEnvironment<K, V> {
     this.envs.push(new Map<K, V>());
   }
 
+  public toString(): string {
+    let s = "SCOPES<[";
+    for (let i = this.envs.length - 1; i >= 0; i--) {
+      const m = [ ...this.envs[i].entries() ].map((([K,V]) => `${K}:${V}`)).join(",")
+      s += `#${i}={${m}}, `
+    }
+    s += "]>"
+    return s;
+  }
+
   public exitLastScope(): void {
     if (this.envs.pop() === undefined) {
       throw `Invalid scope exit: empty environment`;
