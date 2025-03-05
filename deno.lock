@@ -18,6 +18,7 @@
     "npm:@ohm-js/cli@2": "2.0.0_ohm-js@17.1.0",
     "npm:@types/diff@^7.0.1": "7.0.1",
     "npm:@types/node@*": "22.12.0",
+    "npm:binaryen@122": "122.0.0",
     "npm:create-next-app@latest": "15.2.1",
     "npm:diff@7": "7.0.0",
     "npm:ohm-js@^17.1.0": "17.1.0",
@@ -119,6 +120,9 @@
       "dependencies": [
         "undici-types"
       ]
+    },
+    "binaryen@122.0.0": {
+      "integrity": "sha512-XOvjvucq04e5UW0cuoiEZX4wxzepuF7q8sz24JtaXltqjgCqQOZHPXAq5ja/eLljF/orWYmaxuWivpp7paVUCQ=="
     },
     "braces@3.0.3": {
       "integrity": "sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==",
@@ -695,6 +699,7 @@
       "jsr:@std/path@^1.0.8",
       "npm:@ohm-js/cli@2",
       "npm:@types/diff@^7.0.1",
+      "npm:binaryen@122",
       "npm:diff@7",
       "npm:ohm-js@^17.1.0",
       "npm:wabt@^1.0.37"
